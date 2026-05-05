@@ -290,14 +290,6 @@ async def _get_course_enrolled_students_async(
                 )
             )
 
-    # Convert all UIDs to SIDs in a final batch step
-    uids_to_convert = [p.id for p in enrolled_students]
-    if uids_to_convert:
-        logger.debug(f"Converting {len(uids_to_convert)} UIDs to SIDs...")
-        sid_map = await batch_convert_uids_to_sids(uids_to_convert)
-        for p in enrolled_students:
-            p.id = sid_map.get(p.id, p.id)
-
     return enrolled_students
 
 
