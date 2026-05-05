@@ -53,12 +53,18 @@ def export_to_csv(people: List[Person], academic_unit: str, output_path: Optiona
         return
 
     headers = [
-        "Date Submitted", "Last Name", "First Name", "MI", "Department", 
-        "SID/EID Number", "Prox Number", "Type of Card", "Action", 
-        "Clearance Name", "Activation Date", "Expiration Date", 
-        "Clearance Name", "Activation Date", "Expiration Date", 
-        "Clearance Name", "Activation Date", "Expiration Date", 
-        "Clearance Name", "Activation Date", "Expiration Date"
+        "Date Submitted",
+        "Last Name",
+        "First Name",
+        "MI",
+        "Department",
+        "SID/EID Number",
+        "Prox Number",
+        "Type of Card",
+        "Action",
+        "Clearance Name",
+        "Activation Date",
+        "Expiration Date",
     ]
 
     def _write_rows(writer):
@@ -79,7 +85,6 @@ def export_to_csv(people: List[Person], academic_unit: str, output_path: Optiona
                 "",  # Expiration Date
             ]
             # Pad the remaining 9 clearance columns (3 sets of 3) with empty strings
-            row.extend([""] * 9)
             writer.writerow(row)
 
     if output_path:
