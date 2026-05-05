@@ -1,0 +1,28 @@
+# See docs at: https://mystmd.org/guide/frontmatter
+version: 1
+project:
+  title: Card Gate
+  description: Generates data for Facilities Services Electronic Access Control Card Key Request sheets
+  # keywords: []
+  # Uncommenting authors causes it to appear on every page.
+  #authors:
+  #- name: Ryan Lovett
+  #  email: rylo@berkeley.edu
+  #  affiliations:
+  #    - id: ucb
+  #      department: Statistics
+  github: https://github.com/berkeley-cdss/cardgate
+  license:
+    content: BSD-3-Clause
+  toc:
+    - file: index.md
+    - file: cli.md
+
+site:
+  template: book-theme
+  title: Card Gate
+  domains:
+    - cardgate.berkeley-cdss.github.io
+  options:
+    folders: true
+    logo: assets/logo.png
