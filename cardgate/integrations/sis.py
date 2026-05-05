@@ -10,66 +10,16 @@ from cardgate.models import Person
 logger = logging.getLogger(__name__)
 
 # Import from the sis python package
-from sis import terms, classes, enrollments, student
-
-
-async def batch_convert_uids_to_sids(
-    uids: List[str], concurrency_limit: int = 10
-) -> Dict[str, str]:
-    """Safely fetch SIDs for multiple UIDs concurrently using sis.student."""
-    students_id = os.getenv("SIS_STUDENTS_ID")
-    students_key = os.getenv("SIS_STUDENTS_KEY")
-
-    if not students_id or not students_key:
-        logger.warning(
-            "SIS_STUDENTS_ID or SIS_STUDENTS_KEY not set. Returning UIDs as fallback."
-        )
-        return {uid: uid for uid in uids}
-
-    semaphore = asyncio.Semaphore(concurrency_limit)
-
-    async def fetch_with_semaphore(uid):
-        async with semaphore:
-            try:
-                identifiers = await student.get_student(
-                    app_id=students_id,
-                    app_key=students_key,
-                    identifier=uid,
-                    id_type="campus-uid",
-                    item_key="identifiers",
-                )
-                expr = "[?type=='student-id'].id | [0]"
-                sid = jmespath.search(expr, identifiers)
-                return uid, sid or uid  # Fallback to UID if SID not found
-            except Exception as e:
-                logger.debug(f"Failed to fetch SID for UID {uid}: {e}")
-                return uid, uid  # Fallback to UID
-
-    tasks = [fetch_with_semaphore(uid) for uid in uids]
-    results = await asyncio.gather(*tasks)
-    return dict(results)
+from sis import terms, classes, enrollments
 
 
 def get_program_students(program_codes: List[str]) -> List[Person]:
     """
     Query SIS for students in specific academic programs.
-    NOTE: Requires an update to `sis-cli` to query students by program code.
     """
     logger.debug(f"Fetching program students for codes {program_codes}")
-
-    # Mock data for Phase 1 testing
-    mock_uids = ["20001"]
-    sid_map = asyncio.run(batch_convert_uids_to_sids(mock_uids))
-
-    return [
-        Person(
-            id=sid_map.get("20001", "20001"),
-            first_name="Ada",
-            last_name="Lovelace",
-            email="ada@berkeley.edu",
-            role="MA",
-        ),
-    ]
+    logger.warning("Program query not yet implemented in SIS API - returning empty list.")
+    return []
 
 
 async def _get_course_enrolled_students_async(
