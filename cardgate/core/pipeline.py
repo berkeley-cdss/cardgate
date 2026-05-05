@@ -4,7 +4,6 @@ import logging
 from pathlib import Path
 from typing import List, Dict, Optional
 
-from .config import load_config
 from cardgate.integrations import hr, sis
 from cardgate.models import Person
 
