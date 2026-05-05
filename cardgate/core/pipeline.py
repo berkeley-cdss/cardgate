@@ -17,20 +17,32 @@ def fetch_employees(academic_unit: str) -> List[Person]:
     logger.info(f"Total employees identified: {len(employees)}")
     return employees
 
+
 def fetch_program_students(program_codes: List[str]) -> List[Person]:
     logger.info(f"Fetching SIS students for program codes: {program_codes}...")
     students = sis.get_program_students(program_codes)
     logger.info(f"Total program students identified: {len(students)}")
     return students
 
-def fetch_course_people(academic_unit: str, building: str, year: Optional[int] = None, semester: Optional[str] = None) -> List[Person]:
+
+def fetch_course_people(
+    academic_unit: str,
+    building: str,
+    year: Optional[int] = None,
+    semester: Optional[str] = None,
+    from_time: Optional[str] = None,
+) -> List[Person]:
     term_str = f"{semester} {year}" if (year and semester) else "current term"
-    logger.info(f"Fetching course enrollments and staff for {academic_unit} in {building} for {term_str}...")
-    
+    logger.info(
+        f"Fetching course enrollments and staff for {academic_unit} in {building} for {term_str}..."
+    )
+
     # We still want to deduplicate within the course people fetch (e.g. someone is staff and enrolled)
     all_people: Dict[str, Person] = {}
-    
-    course_people = sis.get_course_enrolled_students(academic_unit, building, year, semester)
+
+    course_people = sis.get_course_enrolled_students(
+        academic_unit, building, year, semester, from_time
+    )
     for p in course_people:
         if p.id not in all_people:
             all_people[p.id] = p
@@ -38,12 +50,17 @@ def fetch_course_people(academic_unit: str, building: str, year: Optional[int] =
             # If they are already in as Course-staff, don't overwrite with Course-enrolled
             if p.role == "Course-staff":
                 all_people[p.id] = p
-                
+
     final_people = list(all_people.values())
-    logger.info(f"Total unique course-related individuals identified: {len(final_people)}")
+    logger.info(
+        f"Total unique course-related individuals identified: {len(final_people)}"
+    )
     return final_people
 
-def export_to_csv(people: List[Person], academic_unit: str, output_path: Optional[str] = None):
+
+def export_to_csv(
+    people: List[Person], academic_unit: str, output_path: Optional[str] = None
+):
     """
     Exports the standardized Person data to an intermediate CSV.
     If output_path is None, prints to sys.stdout.
