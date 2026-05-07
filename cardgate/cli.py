@@ -1,3 +1,5 @@
+import asyncio
+import os
 import typer
 import logging
 import sys
@@ -10,6 +12,8 @@ from cardgate.core.pipeline import (
     fetch_course_people,
     export_to_csv,
 )
+from cardgate.integrations.sis import get_term_dates
+from sis.terms import get_term_id_from_year_sem
 
 # Configure logging to write to stderr
 logging.basicConfig(
@@ -49,13 +53,47 @@ def courses(
     output_file: Optional[str] = typer.Option(
         None, "--output", "-o", help="Output CSV file path. Defaults to stdout."
     ),
+    config_file: Optional[str] = typer.Option(
+        "cardgate.yaml",
+        "--config",
+        "-c",
+        help="Path to config YAML",
+    ),
 ):
     """
     Generate card key access spreadsheets for course-enrolled students and course-staff in a specific building.
     """
     logger.info(f"Starting pipeline for courses...")
     people = fetch_course_people(academic_unit, building, year, semester, from_time)
-    export_to_csv(people, academic_unit, output_path=output_file)
+
+    term_begin = None
+    term_end = None
+
+    if year and semester:
+        terms_id = os.getenv("SIS_TERMS_ID")
+        terms_key = os.getenv("SIS_TERMS_KEY")
+        if terms_id and terms_key:
+            term_id = asyncio.run(
+                get_term_id_from_year_sem(terms_id, terms_key, year, semester.lower())
+            )
+            term_begin, term_end = asyncio.run(get_term_dates(term_id))
+            if term_begin:
+                logger.info(f"Term dates: {term_begin} to {term_end}")
+            else:
+                logger.warning(f"Could not fetch term dates for {term_id}")
+
+    if not os.path.exists(config_file):
+        logger.warning(f"Config file not found: {config_file}")
+        config_file = None
+
+    export_to_csv(
+        people,
+        academic_unit,
+        output_path=output_file,
+        term_begin=term_begin,
+        term_end=term_end,
+        config_path=config_file,
+    )
 
 
 @app.command()
@@ -66,13 +104,19 @@ def employees(
     output_file: Optional[str] = typer.Option(
         None, "--output", "-o", help="Output CSV file path. Defaults to stdout."
     ),
+    config_file: Optional[str] = typer.Option(
+        "cardgate.yaml",
+        "--config",
+        "-c",
+        help="Path to config YAML",
+    ),
 ):
     """
     Generate card key access spreadsheets for long-term employees (faculty, staff, postdocs) in an academic unit.
     """
     logger.info(f"Starting pipeline for employees...")
     people = fetch_employees(academic_unit)
-    export_to_csv(people, academic_unit, output_path=output_file)
+    export_to_csv(people, academic_unit, config_file, output_path=output_file)
 
 
 @app.command()
@@ -86,13 +130,19 @@ def programs(
     output_file: Optional[str] = typer.Option(
         None, "--output", "-o", help="Output CSV file path. Defaults to stdout."
     ),
+    config_file: Optional[str] = typer.Option(
+        "cardgate.yaml",
+        "--config",
+        "-c",
+        help="Path to config YAML",
+    ),
 ):
     """
     Generate card key access spreadsheets for program-enrolled students (PhD, MA, BA).
     """
     logger.info(f"Starting pipeline for program students...")
     people = fetch_program_students(program_codes)
-    export_to_csv(people, academic_unit, output_path=output_file)
+    export_to_csv(people, academic_unit, config_file, output_path=output_file)
 
 
 if __name__ == "__main__":

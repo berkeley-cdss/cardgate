@@ -4,13 +4,37 @@ import os
 import jmespath
 import logging
 import datetime
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Tuple
 from cardgate.models import Person
 
 logger = logging.getLogger(__name__)
 
 # Import from the sis python package
-from sis import terms, classes, enrollments
+from sis import terms, classes, enrollments, sis as sis_core
+
+
+async def get_term_dates(term_id: str) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Fetch beginDate and endDate for a given term_id.
+    Returns (begin_date, end_date) as ISO date strings.
+    """
+    terms_id = os.getenv("SIS_TERMS_ID")
+    terms_key = os.getenv("SIS_TERMS_KEY")
+
+    if not terms_id or not terms_key:
+        logger.warning("SIS_TERMS_ID or SIS_TERMS_KEY not set. Cannot fetch term dates.")
+        return None, None
+
+    try:
+        uri = f"{terms.terms_uri}/{term_id}"
+        headers = {"Accept": "application/json", "app_id": terms_id, "app_key": terms_key}
+        data = await sis_core.get_items(uri, {}, headers, "terms")
+        if data and len(data) > 0:
+            return data[0].get("beginDate"), data[0].get("endDate")
+    except Exception as e:
+        logger.error(f"Failed to fetch term dates for {term_id}: {e}")
+
+    return None, None
 
 
 def get_program_students(program_codes: List[str]) -> List[Person]:

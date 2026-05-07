@@ -14,24 +14,37 @@ pip install git+https://github.com/berkeley-cdss/cardgate.git
 
 ## Setup
 
-1. **Obtain API credentials**: You will need to obtain API credentials for the following UC Berkeley SIS services. Contact your departmental SIS support for access.
+1. **Obtain API credentials**: You will need to obtain API credentials for the following UC Berkeley SIS services.
+
    - `SIS_TERMS_ID` / `SIS_TERMS_KEY`
    - `SIS_CLASSES_ID` / `SIS_CLASSES_KEY`
    - `SIS_ENROLLMENTS_ID` / `SIS_ENROLLMENTS_KEY`
-   - `SIS_STUDENTS_ID` / `SIS_STUDENTS_KEY` (optional, for SIS to CalNet UID conversion)
 
-2. **Configure environment variables**: Create a `.env` file in your working directory with these credentials:
+2. **Configure the application**: Create a `cardgate.yaml` configuration file:
 
-   ```bash
-   SIS_TERMS_ID=your_terms_id
-   SIS_TERMS_KEY=your_terms_key
-   SIS_CLASSES_ID=your_classes_id
-   SIS_CLASSES_KEY=your_classes_key
-   SIS_ENROLLMENTS_ID=your_enrollments_id
-   SIS_ENROLLMENTS_KEY=your_enrollments_key
-   SIS_STUDENTS_ID=your_students_id
-   SIS_STUDENTS_KEY=your_students_key
-   ```
+```yaml
+clearances:
+  - Gateway Exterior Door
+  - Gateway Classroom
+  - Gateway L1 West
+
+# Buffer days to add to term dates for activation/expiration
+# Negative values mean before the date, positive means after it
+date_buffer:
+  activation_days: -7   # 7 days before semester starts
+  expiration_days: 4    # 4 days after semester ends
+```
+
+3. **Configure environment variables**: Create a `.env` file in your working directory with these credentials:
+
+```bash
+SIS_TERMS_ID=your_terms_id
+SIS_TERMS_KEY=your_terms_key
+SIS_CLASSES_ID=your_classes_id
+SIS_CLASSES_KEY=your_classes_key
+SIS_ENROLLMENTS_ID=your_enrollments_id
+SIS_ENROLLMENTS_KEY=your_enrollments_key
+```
 
 ## Quick Start
 
@@ -65,19 +78,12 @@ The CSV output is formatted to match the "Facilities Services Electronic Access 
 | First Name | Person's first name |
 | MI | Middle initial (if available) |
 | Department | Academic unit passed via `--unit` |
-| SID/EID Number | Student ID (SIS) or Employee ID (HR) |
+| SID/EID Number | Student ID or Employee ID |
 | Prox Number | Left blank (populated by Card Key API in Phase 2) |
-| Type of Card | Left blank |
-| Action | "Add" |
-| Clearance Name | Mapped from the person's role (e.g., Course-enrolled, Course-staff, Faculty, etc.) |
-| Activation Date | Left blank |
-| Clearance Name | (Spare) |
-| Activation Date | (Spare) |
-| Clearance Name | (Spare) |
-| Activation Date | (Spare) |
-| Clearance Name | (Spare) |
-| Activation Date | (Spare) |
-| Clearance Name | (Spare) |
-| Activation Date | (Spare) |
+| Type of Card | "CalID" |
+| Action | "Add Clearance" |
+| Clearance Name | Location from `cardgate.yaml` |
+| Activation Date | Term begin date + buffer |
+|Expiration Date | Term end date + buffer |
 
-The role mapping is defined in `access_config.yaml`. The spare clearance columns are available for multi-location requests.
+The remaining clearance columns are repeated for each location defined in `clearances`.

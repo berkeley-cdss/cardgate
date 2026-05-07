@@ -1,9 +1,11 @@
 import csv
 import sys
 import logging
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Dict, Optional
 
+from .clearances import load_cardgate_config, get_clearance_locations, get_date_buffer
 from cardgate.integrations import hr, sis
 from cardgate.models import Person
 
@@ -58,15 +60,53 @@ def fetch_course_people(
 
 
 def export_to_csv(
-    people: List[Person], academic_unit: str, output_path: Optional[str] = None
+    people: List[Person],
+    academic_unit: str,
+    config_path: str,
+    output_path: Optional[str] = None,
+    term_begin: Optional[str] = None,
+    term_end: Optional[str] = None,
 ):
     """
     Exports the standardized Person data to an intermediate CSV.
     If output_path is None, prints to sys.stdout.
+    Uses term dates and clearance config to populate date fields.
     """
     if not people:
         logger.warning("No people to export. Skipping CSV generation.")
         return
+
+    try:
+        config = load_cardgate_config(config_path)
+    except FileNotFoundError:
+        logger.warning(f"Config file not found: {config_path}")
+        config = {"clearances": [], "buffer": {"activation_days": 0, "expiration_days": 0}}
+
+    clearance_names = get_clearance_locations(config)
+    act_buffer, exp_buffer = get_date_buffer(config)
+
+    act_date = ""
+    exp_date = ""
+
+    if term_begin:
+        try:
+            begin_dt = datetime.strptime(term_begin, "%Y-%m-%d")
+            act_dt = begin_dt + timedelta(days=act_buffer)
+            act_date = act_dt.strftime("%Y-%m-%d")
+        except ValueError:
+            logger.warning(f"Invalid term_begin date: {term_begin}")
+
+    if term_end:
+        try:
+            end_dt = datetime.strptime(term_end, "%Y-%m-%d")
+            exp_dt = end_dt + timedelta(days=exp_buffer)
+            exp_date = exp_dt.strftime("%Y-%m-%d")
+        except ValueError:
+            logger.warning(f"Invalid term_end date: {term_end}")
+
+    num_clearances = len(clearance_names)
+    if num_clearances == 0:
+        num_clearances = 1
 
     headers = [
         "Date Submitted",
@@ -78,10 +118,10 @@ def export_to_csv(
         "Prox Number",
         "Type of Card",
         "Action",
-        "Clearance Name",
-        "Activation Date",
-        "Expiration Date",
     ]
+
+    for i in range(num_clearances):
+        headers.extend(["Clearance Name", "Activation Date", "Expiration Date"])
 
     def _write_rows(writer):
         writer.writerow(headers)
@@ -94,13 +134,13 @@ def export_to_csv(
                 academic_unit,
                 person.id,
                 "",  # Prox Number
-                "",  # Type of Card
-                "Add",  # Action
-                person.role,  # Clearance Name (mapped to role for now)
-                "",  # Activation Date
-                "",  # Expiration Date
+                "CalID",  # Type of Card
+                "Add Clearance",  # Action
             ]
-            # Pad the remaining 9 clearance columns (3 sets of 3) with empty strings
+
+            for clearance in clearance_names:
+                row.extend([clearance, act_date, exp_date])
+
             writer.writerow(row)
 
     if output_path:
