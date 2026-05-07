@@ -26,6 +26,7 @@ load_dotenv()
 
 app = typer.Typer(
     help="Card Key Data Generation CLI",
+    rich_markup_mode=None,
     context_settings={"help_option_names": ["-h", "--help"]}
 )
 
