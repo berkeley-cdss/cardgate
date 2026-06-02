@@ -158,11 +158,18 @@ def export_to_csv(
             writer.writerow(row)
 
     if output_path:
-        path = Path(output_path)
-        with open(path, "w", newline="") as f:
-            writer = csv.writer(f)
+        if is_file_like:
+            writer = csv.writer(output_path)
             _write_rows(writer)
-        logger.info(f"Data exported successfully to {output_path}")
+            return ""
+        else:
+            path = Path(output_path)
+            with open(path, "w", newline="") as f:
+                writer = csv.writer(f)
+                _write_rows(writer)
+            logger.info(f"Data exported successfully to {output_path}")
+            return ""
     else:
         writer = csv.writer(sys.stdout)
         _write_rows(writer)
+        return ""
