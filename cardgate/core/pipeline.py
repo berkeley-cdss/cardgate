@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import List, Dict, Optional
 
 from .clearances import load_cardgate_config, get_clearance_locations, get_date_buffer
-from cardgate.integrations import hr, sis
+from cardgate.integrations import hr, sis, c1c
 from cardgate.models import Person
 
 logger = logging.getLogger(__name__)
@@ -57,6 +57,29 @@ def fetch_course_people(
         f"Total unique course-related individuals identified: {len(final_people)}"
     )
     return final_people
+
+
+import concurrent.futures
+
+
+def fetch_card_data(people: List[Person]) -> None:
+    """
+    Populate the card_key_number field for each person using the C1C API.
+    Uses a thread pool to fetch data concurrently.
+    """
+    logger.info(f"Fetching card key data for {len(people)} people...")
+
+    def process_person(person: Person):
+        # We need a UID to query the Cal1Card API via campus-uid
+        target_uid = person.uid if person.uid else person.id
+        seos = c1c.get_seos_for_uid(target_uid)
+        if seos:
+            person.card_key_number = seos
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        executor.map(process_person, people)
+
+    logger.info("Finished fetching card key data.")
 
 
 def export_to_csv(
@@ -147,7 +170,7 @@ def export_to_csv(
                 person.middle_initial,
                 academic_unit,
                 person.id,
-                "",  # Prox Number
+                person.card_key_number or "",  # Prox Number (seos)
                 "CalID",  # Type of Card
                 "Add Clearance",  # Action
             ]

@@ -22,12 +22,18 @@ async def get_term_dates(term_id: str) -> Tuple[Optional[str], Optional[str]]:
     terms_key = os.getenv("SIS_TERMS_KEY")
 
     if not terms_id or not terms_key:
-        logger.warning("SIS_TERMS_ID or SIS_TERMS_KEY not set. Cannot fetch term dates.")
+        logger.warning(
+            "SIS_TERMS_ID or SIS_TERMS_KEY not set. Cannot fetch term dates."
+        )
         return None, None
 
     try:
         uri = f"{terms.terms_uri}/{term_id}"
-        headers = {"Accept": "application/json", "app_id": terms_id, "app_key": terms_key}
+        headers = {
+            "Accept": "application/json",
+            "app_id": terms_id,
+            "app_key": terms_key,
+        }
         data = await sis_core.get_items(uri, {}, headers, "terms")
         if data and len(data) > 0:
             return data[0].get("beginDate"), data[0].get("endDate")
@@ -42,7 +48,9 @@ def get_program_students(program_codes: List[str]) -> List[Person]:
     Query SIS for students in specific academic programs.
     """
     logger.debug(f"Fetching program students for codes {program_codes}")
-    logger.warning("Program query not yet implemented in SIS API - returning empty list.")
+    logger.warning(
+        "Program query not yet implemented in SIS API - returning empty list."
+    )
     return []
 
 
@@ -213,6 +221,7 @@ async def _get_course_enrolled_students_async(
                         enrolled_students.append(
                             Person(
                                 id=uid,  # Will batch convert these to SIDs at the end
+                                uid=uid,
                                 first_name=first_name,
                                 last_name=last_name,
                                 middle_initial=middle_initial,
@@ -306,6 +315,7 @@ async def _get_course_enrolled_students_async(
             enrolled_students.append(
                 Person(
                     id=sid,
+                    uid=uid_search,
                     first_name=first_name,
                     last_name=last_name,
                     middle_initial=middle_initial,

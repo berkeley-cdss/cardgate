@@ -10,6 +10,7 @@ from cardgate.core.pipeline import (
     fetch_employees,
     fetch_program_students,
     fetch_course_people,
+    fetch_card_data,
     export_to_csv,
 )
 from cardgate.integrations.sis import get_term_dates
@@ -27,7 +28,7 @@ load_dotenv()
 app = typer.Typer(
     help="Card Key Data Generation CLI",
     rich_markup_mode=None,
-    context_settings={"help_option_names": ["-h", "--help"]}
+    context_settings={"help_option_names": ["-h", "--help"]},
 )
 
 
@@ -90,6 +91,9 @@ def courses(
         logger.warning(f"Config file not found: {config_file}")
         config_file = None
 
+    if people:
+        fetch_card_data(people)
+
     export_to_csv(
         people,
         academic_unit,
@@ -120,6 +124,8 @@ def employees(
     """
     logger.info(f"Starting pipeline for employees...")
     people = fetch_employees(academic_unit)
+    if people:
+        fetch_card_data(people)
     export_to_csv(people, academic_unit, config_file, output_path=output_file)
 
 
@@ -146,6 +152,8 @@ def programs(
     """
     logger.info(f"Starting pipeline for program students...")
     people = fetch_program_students(program_codes)
+    if people:
+        fetch_card_data(people)
     export_to_csv(people, academic_unit, config_file, output_path=output_file)
 
 

@@ -8,6 +8,7 @@ class Person(BaseModel):
     """
 
     id: str = Field(..., description="The Student ID (SID) or Employee ID (EID)")
+    uid: Optional[str] = Field(None, description="The CalNet UID (Campus UID)")
     first_name: str
     last_name: str
     middle_initial: str = ""
