@@ -15,6 +15,7 @@ dependencies = [
     "pydantic>=2.0.0",
     "PyYAML>=6.0",
     "python-dotenv>=1.0.0",
+    "Flask>=2.0.0",
     "sis @ git+https://github.com/ryanlovett/sis-cli.git@b9e441f",
     "ucbhr @ git+https://github.com/ryanlovett/ucbhr.git@11bc8d7",
 ]

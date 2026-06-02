@@ -135,6 +135,8 @@ def export_to_csv(
     for i in range(num_clearances):
         headers.extend(["Clearance Name", "Activation Date", "Expiration Date"])
 
+    is_file_like = hasattr(output_path, "write")
+
     def _write_rows(writer):
         writer.writerow(headers)
         for person in people:
