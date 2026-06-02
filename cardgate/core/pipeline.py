@@ -66,24 +66,36 @@ def export_to_csv(
     output_path: Optional[str] = None,
     term_begin: Optional[str] = None,
     term_end: Optional[str] = None,
+    activation_days: Optional[int] = None,
+    expiration_days: Optional[int] = None,
 ):
     """
     Exports the standardized Person data to an intermediate CSV.
     If output_path is None, prints to sys.stdout.
+    If output_path is a string, writes to that file.
+    If output_path is a file-like object, writes to it.
     Uses term dates and clearance config to populate date fields.
+    activation_days and expiration_days override config values if provided.
     """
     if not people:
         logger.warning("No people to export. Skipping CSV generation.")
-        return
+        return ""
 
     try:
         config = load_cardgate_config(config_path)
     except FileNotFoundError:
         logger.warning(f"Config file not found: {config_path}")
-        config = {"clearances": [], "buffer": {"activation_days": 0, "expiration_days": 0}}
+        config = {
+            "clearances": [],
+            "date_buffer": {"activation_days": 0, "expiration_days": 0},
+        }
 
     clearance_names = get_clearance_locations(config)
-    act_buffer, exp_buffer = get_date_buffer(config)
+
+    # Use provided values or fall back to config
+    default_act, default_exp = get_date_buffer(config)
+    act_buffer = activation_days if activation_days is not None else default_act
+    exp_buffer = expiration_days if expiration_days is not None else default_exp
 
     act_date = ""
     exp_date = ""
