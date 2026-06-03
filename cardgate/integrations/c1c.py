@@ -6,7 +6,10 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-C1C_API_BASE = "https://test-c1c-api.sait-west.berkeley.edu/c1c-api/v1/CardData"
+C1C_API_BASE = os.environ.get(
+    "C1C_API_BASE_URL",
+    "https://test-c1c-api.sait-west.berkeley.edu",
+) + "/c1c-api/v1/CardData"
 
 
 def get_card_data(uid: str) -> Optional[dict]:
