@@ -116,19 +116,20 @@ def export_to_csv(
         "First Name",
         "MI",
         "Department",
-        "SID/EID Number",
-        "Prox Number",
+        "Student/Employee ID Number",
+        "6 digit (Low Frequency)",
+        "7 digit (High Frequency)",
         "Type of Card",
         "Action",
     ]
-
-    for i in range(num_clearances):
-        headers.extend(["Clearance Name", "Activation Date", "Expiration Date"])
+    for _ in range(10):
+        headers.append("Clearance Name")
 
     is_file_like = hasattr(output_path, "write")
 
     def _write_rows(writer):
         writer.writerow(headers)
+
         for person in people:
             row = [
                 "",  # Date Submitted
@@ -137,13 +138,16 @@ def export_to_csv(
                 person.middle_initial,
                 academic_unit,
                 person.id,
-                person.card_key_number or "",  # Prox Number (seos)
+                person.lowprox_number or "",  # 6 digit (Low Frequency)
+                person.seos_number or "",  # 7 digit (High Frequency / seos)
                 "CalID",  # Type of Card
                 "Add Clearance",  # Action
             ]
-
-            for clearance in clearance_names:
-                row.extend([clearance, act_date, exp_date])
+            for i in range(10):
+                if i < len(clearance_names):
+                    row.append(clearance_names[i])
+                else:
+                    row.append("")
 
             writer.writerow(row)
 

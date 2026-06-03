@@ -17,4 +17,5 @@ class Person(BaseModel):
         ...,
         description="Role type: Faculty, Staff, Postdoc, PhD, MA, BA, Course-enrolled, Course-staff",
     )
-    card_key_number: Optional[str] = None
+    seos_number: Optional[str] = None  # 7-digit high frequency (seos)
+    lowprox_number: Optional[str] = None   # 6-digit low frequency (lowprox)

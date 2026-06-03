@@ -9,9 +9,10 @@ logger = logging.getLogger(__name__)
 C1C_API_BASE = "https://test-c1c-api.sait-west.berkeley.edu/c1c-api/v1/CardData"
 
 
-def get_seos_for_uid(uid: str) -> Optional[str]:
+def get_card_data(uid: str) -> Optional[dict]:
     """
-    Fetch the 'seos' card data for a given campus UID from the Cal1Card API.
+    Fetch card data for a given campus UID from the Cal1Card API.
+    Returns the full response dict, or None if not found / on error.
     """
     username = os.environ.get("C1C_APP_ID")
     password = os.environ.get("C1C_APP_KEY")
@@ -23,7 +24,6 @@ def get_seos_for_uid(uid: str) -> Optional[str]:
         return None
 
     try:
-        # Based on curl -X 'GET' '.../CardData/854589?id-type=campus-uid' -H 'accept: application/json' -H 'Authorization: Basic ...'
         url = f"{C1C_API_BASE}/{uid}"
         params = {"id-type": "campus-uid"}
         headers = {"accept": "application/json"}
@@ -37,8 +37,7 @@ def get_seos_for_uid(uid: str) -> Optional[str]:
         )
 
         if response.status_code == 200:
-            data = response.json()
-            return data.get("seos")
+            return response.json()
         elif response.status_code == 404:
             logger.debug(f"No card data found for UID {uid}")
             return None
