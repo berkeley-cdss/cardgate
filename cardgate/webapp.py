@@ -45,6 +45,7 @@ def generate():
         building = request.form.get("building", "")
         year = request.form.get("year", "")
         semester = request.form.get("semester", "")
+        from_time = request.form.get("from_time", "")
 
         if not academic_unit or not building or not year or not semester:
             return f"Missing required fields: unit={academic_unit}, building={building}, year={year}, semester={semester}", 400
@@ -52,7 +53,7 @@ def generate():
         # Fetch people from SIS
         from cardgate.integrations import sis as sis_module
         people = sis_module.get_course_enrolled_students(
-            academic_unit, building, int(year), semester
+            academic_unit, building, int(year), semester, from_time or None
         )
 
         if people:
