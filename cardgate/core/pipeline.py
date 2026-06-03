@@ -1,11 +1,10 @@
 import csv
 import sys
 import logging
-from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Dict, Optional
 
-from .clearances import load_cardgate_config, get_clearance_locations, get_date_buffer
+from .clearances import load_cardgate_config, get_clearance_locations
 from cardgate.integrations import hr, sis, c1c
 from cardgate.models import Person
 
@@ -64,17 +63,19 @@ import concurrent.futures
 
 def fetch_card_data(people: List[Person]) -> None:
     """
-    Populate the card_key_number field for each person using the C1C API.
+    Populate the seos_number and lowprox_number fields for each person using the C1C API.
     Uses a thread pool to fetch data concurrently.
     """
     logger.info(f"Fetching card key data for {len(people)} people...")
 
     def process_person(person: Person):
-        # We need a UID to query the Cal1Card API via campus-uid
         target_uid = person.uid if person.uid else person.id
-        seos = c1c.get_seos_for_uid(target_uid)
-        if seos:
-            person.card_key_number = seos
+        data = c1c.get_card_data(target_uid)
+        if data:
+            if data.get("seos"):
+                person.seos_number = data["seos"]
+            if data.get("lowprox"):
+                person.lowprox_number = data["lowprox"]
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
         executor.map(process_person, people)
@@ -87,61 +88,27 @@ def export_to_csv(
     academic_unit: str,
     config_path: str,
     output_path: Optional[str] = None,
-    term_begin: Optional[str] = None,
-    term_end: Optional[str] = None,
-    activation_days: Optional[int] = None,
-    expiration_days: Optional[int] = None,
+    clearances: Optional[List[str]] = None,
 ):
     """
-    Exports the standardized Person data to an intermediate CSV.
-    If output_path is None, prints to sys.stdout.
-    If output_path is a string, writes to that file.
-    If output_path is a file-like object, writes to it.
-    Uses term dates and clearance config to populate date fields.
-    activation_days and expiration_days override config values if provided.
+    Exports the standardized Person data to a CSV matching the Facilities
+    Services Electronic Access Card Key Request template format.
+
+    If clearances is provided, it overrides the clearance names from the config.
     """
     if not people:
         logger.warning("No people to export. Skipping CSV generation.")
         return ""
 
-    try:
-        config = load_cardgate_config(config_path)
-    except FileNotFoundError:
-        logger.warning(f"Config file not found: {config_path}")
-        config = {
-            "clearances": [],
-            "date_buffer": {"activation_days": 0, "expiration_days": 0},
-        }
-
-    clearance_names = get_clearance_locations(config)
-
-    # Use provided values or fall back to config
-    default_act, default_exp = get_date_buffer(config)
-    act_buffer = activation_days if activation_days is not None else default_act
-    exp_buffer = expiration_days if expiration_days is not None else default_exp
-
-    act_date = ""
-    exp_date = ""
-
-    if term_begin:
+    if clearances is not None:
+        clearance_names = clearances
+    else:
         try:
-            begin_dt = datetime.strptime(term_begin, "%Y-%m-%d")
-            act_dt = begin_dt + timedelta(days=act_buffer)
-            act_date = act_dt.strftime("%Y-%m-%d")
-        except ValueError:
-            logger.warning(f"Invalid term_begin date: {term_begin}")
-
-    if term_end:
-        try:
-            end_dt = datetime.strptime(term_end, "%Y-%m-%d")
-            exp_dt = end_dt + timedelta(days=exp_buffer)
-            exp_date = exp_dt.strftime("%Y-%m-%d")
-        except ValueError:
-            logger.warning(f"Invalid term_end date: {term_end}")
-
-    num_clearances = len(clearance_names)
-    if num_clearances == 0:
-        num_clearances = 1
+            config = load_cardgate_config(config_path)
+        except (FileNotFoundError, TypeError):
+            logger.warning(f"Config file not found or invalid: {config_path}")
+            config = {"clearances": []}
+        clearance_names = get_clearance_locations(config)
 
     headers = [
         "Date Submitted",

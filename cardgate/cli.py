@@ -1,4 +1,3 @@
-import asyncio
 import os
 import typer
 import logging
@@ -13,8 +12,7 @@ from cardgate.core.pipeline import (
     fetch_card_data,
     export_to_csv,
 )
-from cardgate.integrations.sis import get_term_dates
-from sis.terms import get_term_id_from_year_sem
+
 
 # Configure logging to write to stderr
 logging.basicConfig(
@@ -58,6 +56,9 @@ def courses(
     output_file: Optional[str] = typer.Option(
         None, "--output", "-o", help="Output CSV file path. Defaults to stdout."
     ),
+    clearances: Optional[str] = typer.Option(
+        None, "--clearances", help="Comma-separated clearance names (defaults to all from config)"
+    ),
     config_file: Optional[str] = typer.Option(
         "cardgate.yaml",
         "--config",
@@ -71,22 +72,6 @@ def courses(
     logger.info(f"Starting pipeline for courses...")
     people = fetch_course_people(academic_unit, building, year, semester, from_time)
 
-    term_begin = None
-    term_end = None
-
-    if year and semester:
-        terms_id = os.getenv("SIS_TERMS_ID")
-        terms_key = os.getenv("SIS_TERMS_KEY")
-        if terms_id and terms_key:
-            term_id = asyncio.run(
-                get_term_id_from_year_sem(terms_id, terms_key, year, semester.lower())
-            )
-            term_begin, term_end = asyncio.run(get_term_dates(term_id))
-            if term_begin:
-                logger.info(f"Term dates: {term_begin} to {term_end}")
-            else:
-                logger.warning(f"Could not fetch term dates for {term_id}")
-
     if not os.path.exists(config_file):
         logger.warning(f"Config file not found: {config_file}")
         config_file = None
@@ -98,9 +83,8 @@ def courses(
         people,
         academic_unit,
         output_path=output_file,
-        term_begin=term_begin,
-        term_end=term_end,
         config_path=config_file,
+        clearances=clearances.split(",") if clearances else None,
     )
 
 
@@ -111,6 +95,9 @@ def employees(
     ),
     output_file: Optional[str] = typer.Option(
         None, "--output", "-o", help="Output CSV file path. Defaults to stdout."
+    ),
+    clearances: Optional[str] = typer.Option(
+        None, "--clearances", help="Comma-separated clearance names (defaults to all from config)"
     ),
     config_file: Optional[str] = typer.Option(
         "cardgate.yaml",
@@ -126,7 +113,7 @@ def employees(
     people = fetch_employees(academic_unit)
     if people:
         fetch_card_data(people)
-    export_to_csv(people, academic_unit, config_file, output_path=output_file)
+    export_to_csv(people, academic_unit, config_file, output_path=output_file, clearances=clearances.split(",") if clearances else None)
 
 
 @app.command()
@@ -139,6 +126,9 @@ def programs(
     ),
     output_file: Optional[str] = typer.Option(
         None, "--output", "-o", help="Output CSV file path. Defaults to stdout."
+    ),
+    clearances: Optional[str] = typer.Option(
+        None, "--clearances", help="Comma-separated clearance names (defaults to all from config)"
     ),
     config_file: Optional[str] = typer.Option(
         "cardgate.yaml",
@@ -154,7 +144,7 @@ def programs(
     people = fetch_program_students(program_codes)
     if people:
         fetch_card_data(people)
-    export_to_csv(people, academic_unit, config_file, output_path=output_file)
+    export_to_csv(people, academic_unit, config_file, output_path=output_file, clearances=clearances.split(",") if clearances else None)
 
 
 if __name__ == "__main__":

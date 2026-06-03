@@ -20,22 +20,6 @@ def get_clearance_locations(config: dict) -> List[str]:
     return config.get("clearances", [])
 
 
-def get_date_buffer(config: dict) -> tuple[int, int]:
-    """Returns (activation_days, expiration_days) tuple."""
-    buffer = config.get("date_buffer", {})
-    return buffer.get("activation_days", 0), buffer.get("expiration_days", 0)
-
-
-def get_default_activation_days(config: dict) -> int:
-    """Returns default activation buffer days."""
-    return config.get("date_buffer", {}).get("activation_days", -7)
-
-
-def get_default_expiration_days(config: dict) -> int:
-    """Returns default expiration buffer days."""
-    return config.get("date_buffer", {}).get("expiration_days", 4)
-
-
 def get_academic_units(config: dict) -> List[str]:
     """Returns the list of academic units for the web dropdown."""
     web_config = config.get("web", {})
