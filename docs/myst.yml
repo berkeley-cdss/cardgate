@@ -17,6 +17,8 @@ project:
   toc:
     - file: index.md
     - file: cli.md
+    - file: web.md
+    - file: setup.md
 
 site:
   template: book-theme
