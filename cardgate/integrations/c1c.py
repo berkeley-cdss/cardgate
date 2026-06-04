@@ -6,10 +6,13 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-C1C_API_BASE = os.environ.get(
-    "C1C_API_BASE_URL",
-    "https://test-c1c-api.sait-west.berkeley.edu",
-) + "/c1c-api/v1/CardData"
+
+def _api_base() -> str:
+    """Return the C1C API base URL from env, falling back to test."""
+    return os.environ.get(
+        "C1C_API_BASE_URL",
+        "https://test-c1c-api.sait-west.berkeley.edu",
+    ) + "/c1c-api/v1/CardData"
 
 
 def get_card_data(uid: str) -> Optional[dict]:
@@ -27,7 +30,7 @@ def get_card_data(uid: str) -> Optional[dict]:
         return None
 
     try:
-        url = f"{C1C_API_BASE}/{uid}"
+        url = f"{_api_base()}/{uid}"
         params = {"id-type": "campus-uid"}
         headers = {"accept": "application/json"}
 
