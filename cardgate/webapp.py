@@ -129,19 +129,19 @@ def progress(job_id):
         while True:
             job = jobs.get(job_id)
             if not job:
-                yield json.dumps({"type": "error", "message": "Job not found"}) + "\n"
+                yield "data: " + json.dumps({"type": "error", "message": "Job not found"}) + "\n\n"
                 return
 
             if job["status"] == "error":
-                yield json.dumps({"type": "error", "message": job["error"]}) + "\n"
+                yield "data: " + json.dumps({"type": "error", "message": job["error"]}) + "\n\n"
                 return
 
             if job["progress"] != last_progress:
                 last_progress = job["progress"]
-                yield json.dumps({"type": "progress", "message": job["progress"]}) + "\n"
+                yield "data: " + json.dumps({"type": "progress", "message": job["progress"]}) + "\n\n"
 
             if job["status"] == "done":
-                yield json.dumps({"type": "done", "filename": job["filename"]}) + "\n"
+                yield "data: " + json.dumps({"type": "done", "filename": job["filename"]}) + "\n\n"
                 return
 
             time.sleep(0.5)
