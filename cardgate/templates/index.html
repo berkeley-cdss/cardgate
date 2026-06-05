@@ -66,7 +66,7 @@
     <!-- Loading Overlay -->
     <div id="loading" class="hidden fixed inset-0 bg-white bg-opacity-90 flex flex-col items-center justify-center z-50">
         <div class="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
-        <p class="mt-4 text-gray-600">Generating CSV...</p>
+        <p id="progress-text" class="mt-4 text-gray-600">Generating CSV...</p>
     </div>
 
 <script>
@@ -96,62 +96,76 @@
         
         window.onload = setDefaultYear;
 
-        function submitForm() {
+        async function submitForm() {
             var loading = document.getElementById('loading');
+            var progressText = document.getElementById('progress-text');
             var btn = document.getElementById('submit-btn');
             
             loading.classList.remove('hidden');
             btn.disabled = true;
             
-            var xhr = new XMLHttpRequest();
             var form = document.getElementById('cardgate-form');
             var formData = new FormData(form);
             
-            // Get building value - use "Other" text field if selected
-            var buildingSelect = form.elements['building'];
-            if (buildingSelect && buildingSelect.value === 'Other') {
-                var otherBuilding = form.elements['building_other'];
-                if (otherBuilding && otherBuilding.value) {
-                    formData.set('building', otherBuilding.value);
-                }
-            }
-            
-            xhr.open('POST', '/generate', true);
-            xhr.responseType = 'blob';
-            
-            xhr.onload = function() {
-                btn.disabled = false;
-                loading.classList.add('hidden');
+            try {
+                var response = await fetch('/generate', { method: 'POST', body: formData });
                 
-                if (xhr.status === 200) {
-                    var blob = xhr.response;
-                    var disp = xhr.getResponseHeader('Content-Disposition') || '';
-                    var match = disp.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/i);
-                    var filename = match ? match[1].replace(/['"]/g, '') : 'cardgate.csv';
-                    
-                    var url = window.URL.createObjectURL(blob);
-                    var a = document.createElement('a');
-                    a.href = url;
-                    a.download = filename;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                } else {
-                    alert('Error: ' + xhr.statusText);
+                if (!response.ok) {
+                    var text = await response.text();
+                    alert('Error: ' + text);
+                    return false;
                 }
-            };
-            
-            xhr.onerror = function() {
+                
+                var reader = response.body.getReader();
+                var decoder = new TextDecoder();
+                var buffer = '';
+                
+                while (true) {
+                    var result = await reader.read();
+                    if (result.done) break;
+                    
+                    buffer += decoder.decode(result.value, { stream: true });
+                    var lines = buffer.split('\n');
+                    buffer = lines.pop();
+                    
+                    for (var line of lines) {
+                        if (!line.trim()) continue;
+                        try {
+                            var msg = JSON.parse(line);
+                            if (msg.type === 'progress') {
+                                progressText.textContent = msg.message;
+                            } else if (msg.type === 'done') {
+                                var binaryStr = atob(msg.csv);
+                                var bytes = new Uint8Array(binaryStr.length);
+                                for (var i = 0; i < binaryStr.length; i++) {
+                                    bytes[i] = binaryStr.charCodeAt(i);
+                                }
+                                var blob = new Blob([bytes], { type: 'text/csv;charset=utf-8' });
+                                var url = URL.createObjectURL(blob);
+                                var a = document.createElement('a');
+                                a.href = url;
+                                a.download = msg.filename;
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                                URL.revokeObjectURL(url);
+                            } else if (msg.type === 'error') {
+                                alert('Error: ' + msg.message);
+                            }
+                        } catch (e) {
+                            console.error('Failed to parse line:', line, e);
+                        }
+                    }
+                }
+            } catch (e) {
+                alert('Network error: ' + e.message);
+            } finally {
                 btn.disabled = false;
                 loading.classList.add('hidden');
-                alert('Network error');
-            };
-            
-            xhr.send(formData);
+            }
             
             return false;
         }
-    </script>
     </script>
 </body>
 </html>

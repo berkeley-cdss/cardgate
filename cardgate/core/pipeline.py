@@ -61,16 +61,18 @@ def fetch_course_people(
 import concurrent.futures
 
 
-def fetch_card_data(people: List[Person]) -> None:
+def fetch_card_data(people: List[Person], progress_callback=None) -> None:
     """
     Populate the seos_number and lowprox_number fields for each person using the C1C API.
     Uses a thread pool to fetch data concurrently.
+    progress_callback(done, total) is called after each person completes.
     """
     if not people:
         return
 
     # Validate C1C API is configured before spawning workers
     import os
+
     if not os.environ.get("C1C_API_BASE_URL"):
         raise ValueError(
             "C1C_API_BASE_URL environment variable not set. "
@@ -88,8 +90,13 @@ def fetch_card_data(people: List[Person]) -> None:
             if data.get("lowprox"):
                 person.lowprox_number = data["lowprox"]
 
+    total = len(people)
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-        list(executor.map(process_person, people))
+        futures = [executor.submit(process_person, p) for p in people]
+        for i, future in enumerate(concurrent.futures.as_completed(futures)):
+            if progress_callback:
+                progress_callback(i + 1, total)
+            future.result()  # surface exceptions
 
     logger.info("Finished fetching card key data.")
 
