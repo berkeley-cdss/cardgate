@@ -66,6 +66,17 @@ def fetch_card_data(people: List[Person]) -> None:
     Populate the seos_number and lowprox_number fields for each person using the C1C API.
     Uses a thread pool to fetch data concurrently.
     """
+    if not people:
+        return
+
+    # Validate C1C API is configured before spawning workers
+    import os
+    if not os.environ.get("C1C_API_BASE_URL"):
+        raise ValueError(
+            "C1C_API_BASE_URL environment variable not set. "
+            "Cannot fetch card key data."
+        )
+
     logger.info(f"Fetching card key data for {len(people)} people...")
 
     def process_person(person: Person):
