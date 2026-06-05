@@ -7,14 +7,6 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 
-def _api_base() -> str:
-    """Return the C1C API base URL from env, falling back to test."""
-    return os.environ.get(
-        "C1C_API_BASE_URL",
-        "https://test-c1c-api.sait-west.berkeley.edu",
-    ) + "/c1c-api/v1/CardData"
-
-
 def get_card_data(uid: str) -> Optional[dict]:
     """
     Fetch card data for a given campus UID from the Cal1Card API.
@@ -29,8 +21,14 @@ def get_card_data(uid: str) -> Optional[dict]:
         )
         return None
 
+    api_base = os.environ.get("C1C_API_BASE_URL")
+    if not api_base:
+        raise ValueError(
+            "C1C_API_BASE_URL environment variable not set."
+        )
+
     try:
-        url = f"{_api_base()}/{uid}"
+        url = f"{api_base.rstrip('/')}/{uid}"
         params = {"id-type": "campus-uid"}
         headers = {"accept": "application/json"}
 

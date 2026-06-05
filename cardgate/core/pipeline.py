@@ -89,7 +89,7 @@ def fetch_card_data(people: List[Person]) -> None:
                 person.lowprox_number = data["lowprox"]
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-        executor.map(process_person, people)
+        list(executor.map(process_person, people))
 
     logger.info("Finished fetching card key data.")
 
