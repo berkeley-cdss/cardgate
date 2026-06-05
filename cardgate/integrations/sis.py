@@ -11,6 +11,14 @@ logger = logging.getLogger(__name__)
 
 # Import from the sis python package
 from sis import terms, classes, enrollments, sis as sis_core
+from sis.student import (
+    get_students_by_plan_code,
+    deduplicate_students,
+    extract_campus_uid,
+    extract_student_id,
+    extract_name,
+    extract_email,
+)
 
 
 async def get_term_dates(term_id: str) -> Tuple[Optional[str], Optional[str]]:
@@ -43,15 +51,91 @@ async def get_term_dates(term_id: str) -> Tuple[Optional[str], Optional[str]]:
     return None, None
 
 
-def get_program_students(program_codes: List[str]) -> List[Person]:
+async def _get_program_students_async(
+    program_codes: List[str],
+    code_to_role: Optional[Dict[str, str]] = None,
+) -> List[Person]:
+    """
+    Async implementation: query SIS for students in specific academic programs.
+    """
+    students_id = os.getenv("SIS_STUDENTS_ID")
+    students_key = os.getenv("SIS_STUDENTS_KEY")
+    if not students_id or not students_key:
+        raise ValueError("SIS_STUDENTS_ID or SIS_STUDENTS_KEY not set.")
+
+    all_students = []
+    for code in program_codes:
+        results = await get_students_by_plan_code(
+            students_id, students_key, code, inc_acad=True
+        )
+        for student in results:
+            all_students.append((student, code))
+
+    # Deduplicate raw students first, keeping the first plan code seen
+    seen_uids = {}
+    deduped = []
+    for student, plan_code in all_students:
+        uid = extract_campus_uid(student)
+        if uid and uid not in seen_uids:
+            seen_uids[uid] = plan_code
+            deduped.append(student)
+
+    # Build Person objects
+    people = []
+    for student in deduped:
+        uid = extract_campus_uid(student)
+        sid = extract_student_id(student) or uid
+        raw_name = extract_name(student)
+        email = extract_email(student)
+
+        first_name, last_name, middle_initial = "", "", ""
+        if raw_name and "," in raw_name:
+            parts = raw_name.split(",", 1)
+            last_name = parts[0].strip()
+            first_part = parts[1].strip()
+            if " " in first_part:
+                fn_parts = first_part.split(" ", 1)
+                first_name = fn_parts[0]
+                middle_initial = fn_parts[1][0].upper()
+            else:
+                first_name = first_part
+
+        # Determine role from the plan code that was matched
+        plan_code = seen_uids.get(uid, "")
+        role = "Program-enrolled"
+        if code_to_role and plan_code in code_to_role:
+            role = code_to_role[plan_code]
+
+        people.append(
+            Person(
+                id=sid,
+                uid=uid,
+                first_name=first_name,
+                last_name=last_name,
+                middle_initial=middle_initial,
+                email=email,
+                role=role,
+            )
+        )
+
+    return people
+
+
+def get_program_students(
+    program_codes: List[str],
+    code_to_role: Optional[Dict[str, str]] = None,
+) -> List[Person]:
     """
     Query SIS for students in specific academic programs.
+
+    Args:
+        program_codes: List of SIS academic plan codes (e.g. ["00891PHDG", "00891MAG"])
+        code_to_role: Optional mapping of plan code to role string.
+                      If provided, each Person's role is set from this mapping.
+                      If not provided, role defaults to "Program-enrolled".
     """
     logger.debug(f"Fetching program students for codes {program_codes}")
-    logger.warning(
-        "Program query not yet implemented in SIS API - returning empty list."
-    )
-    return []
+    return asyncio.run(_get_program_students_async(program_codes, code_to_role))
 
 
 async def _get_course_enrolled_students_async(

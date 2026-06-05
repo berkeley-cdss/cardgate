@@ -11,6 +11,11 @@ from cardgate.models import Person
 logger = logging.getLogger(__name__)
 
 
+def get_programs(config: dict) -> List[dict]:
+    """Returns the list of academic program definitions from config."""
+    return config.get("programs", [])
+
+
 def fetch_employees(academic_unit: str) -> List[Person]:
     logger.info(f"Fetching HR employees for unit: {academic_unit}...")
     employees = hr.get_employees(academic_unit)
@@ -18,9 +23,12 @@ def fetch_employees(academic_unit: str) -> List[Person]:
     return employees
 
 
-def fetch_program_students(program_codes: List[str]) -> List[Person]:
+def fetch_program_students(
+    program_codes: List[str],
+    code_to_role: Optional[Dict[str, str]] = None,
+) -> List[Person]:
     logger.info(f"Fetching SIS students for program codes: {program_codes}...")
-    students = sis.get_program_students(program_codes)
+    students = sis.get_program_students(program_codes, code_to_role=code_to_role)
     logger.info(f"Total program students identified: {len(students)}")
     return students
 

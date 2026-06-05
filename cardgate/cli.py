@@ -11,8 +11,9 @@ from cardgate.core.pipeline import (
     fetch_course_people,
     fetch_card_data,
     export_to_csv,
+    get_programs,
 )
-
+from cardgate.core.clearances import load_cardgate_config
 
 # Configure logging to write to stderr
 logging.basicConfig(
@@ -57,7 +58,9 @@ def courses(
         None, "--output", "-o", help="Output CSV file path. Defaults to stdout."
     ),
     clearances: Optional[str] = typer.Option(
-        None, "--clearances", help="Comma-separated clearance names (defaults to all from config)"
+        None,
+        "--clearances",
+        help="Comma-separated clearance names (defaults to all from config)",
     ),
     config_file: Optional[str] = typer.Option(
         "cardgate.yaml",
@@ -97,7 +100,9 @@ def employees(
         None, "--output", "-o", help="Output CSV file path. Defaults to stdout."
     ),
     clearances: Optional[str] = typer.Option(
-        None, "--clearances", help="Comma-separated clearance names (defaults to all from config)"
+        None,
+        "--clearances",
+        help="Comma-separated clearance names (defaults to all from config)",
     ),
     config_file: Optional[str] = typer.Option(
         "cardgate.yaml",
@@ -113,7 +118,13 @@ def employees(
     people = fetch_employees(academic_unit)
     if people:
         fetch_card_data(people)
-    export_to_csv(people, academic_unit, config_file, output_path=output_file, clearances=clearances.split(",") if clearances else None)
+    export_to_csv(
+        people,
+        academic_unit,
+        config_file,
+        output_path=output_file,
+        clearances=clearances.split(",") if clearances else None,
+    )
 
 
 @app.command()
@@ -128,7 +139,9 @@ def programs(
         None, "--output", "-o", help="Output CSV file path. Defaults to stdout."
     ),
     clearances: Optional[str] = typer.Option(
-        None, "--clearances", help="Comma-separated clearance names (defaults to all from config)"
+        None,
+        "--clearances",
+        help="Comma-separated clearance names (defaults to all from config)",
     ),
     config_file: Optional[str] = typer.Option(
         "cardgate.yaml",
@@ -141,10 +154,25 @@ def programs(
     Generate card key access spreadsheets for program-enrolled students (PhD, MA, BA).
     """
     logger.info(f"Starting pipeline for program students...")
-    people = fetch_program_students(program_codes)
+
+    # Build code_to_role mapping from config
+    code_to_role = {}
+    if config_file and os.path.exists(config_file):
+        cfg = load_cardgate_config(config_file)
+        for prog in get_programs(cfg):
+            if prog.get("code"):
+                code_to_role[prog["code"]] = prog.get("role", "Program-enrolled")
+
+    people = fetch_program_students(program_codes, code_to_role=code_to_role)
     if people:
         fetch_card_data(people)
-    export_to_csv(people, academic_unit, config_file, output_path=output_file, clearances=clearances.split(",") if clearances else None)
+    export_to_csv(
+        people,
+        academic_unit,
+        config_file,
+        output_path=output_file,
+        clearances=clearances.split(",") if clearances else None,
+    )
 
 
 if __name__ == "__main__":

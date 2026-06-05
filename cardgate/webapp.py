@@ -14,7 +14,12 @@ from cardgate.core.clearances import (
     get_buildings,
     get_clearance_locations,
 )
-from cardgate.core.pipeline import export_to_csv, fetch_card_data
+from cardgate.core.pipeline import (
+    export_to_csv,
+    fetch_card_data,
+    fetch_program_students,
+    get_programs,
+)
 
 load_dotenv()
 
@@ -27,33 +32,63 @@ config = load_cardgate_config(CONFIG_PATH)
 jobs = {}
 
 
-def start_job(academic_unit, building, year, semester, from_time, selected_clearances):
+def start_job(params):
     job_id = str(uuid.uuid4())
+    mode = params.get("mode", "courses")
+
+    # Build base job record
     jobs[job_id] = {
         "status": "pending",
         "progress": "",
-        "filename": f"{academic_unit}-{building}-{year}{semester}.csv",
         "csv": None,
         "error": None,
     }
 
+    if mode == "programs":
+        program_codes = params.get("program_codes", [])
+        code_to_role = params.get("code_to_role", {})
+        label = "-".join(program_codes[:3])
+        jobs[job_id]["filename"] = f"{label}.csv"
+    else:
+        unit = params.get("academic_unit", "Unknown")
+        building = params.get("building", "Unknown")
+        year = params.get("year", "")
+        semester = params.get("semester", "")
+        jobs[job_id]["filename"] = f"{unit}-{building}-{year}{semester}.csv"
+
     def process():
         try:
             jobs[job_id]["status"] = "processing"
-            jobs[job_id]["progress"] = "Querying SIS..."
-            from cardgate.integrations import sis as sis_module
 
-            people = sis_module.get_course_enrolled_students(
-                academic_unit, building, int(year), semester, from_time or None
-            )
+            if mode == "programs":
+                jobs[job_id]["progress"] = "Querying SIS for program students..."
+                from cardgate.integrations import sis as sis_module
+
+                people = sis_module.get_program_students(
+                    program_codes, code_to_role=code_to_role
+                )
+                unit = params.get("academic_unit", "Program")
+            else:
+                jobs[job_id]["progress"] = "Querying SIS..."
+                from cardgate.integrations import sis as sis_module
+
+                people = sis_module.get_course_enrolled_students(
+                    params.get("academic_unit"),
+                    params.get("building"),
+                    int(params.get("year")),
+                    params.get("semester"),
+                    params.get("from_time") or None,
+                )
+                unit = params.get("academic_unit")
+
             jobs[job_id]["progress"] = f"Found {len(people)} people"
 
             if people:
                 if not os.environ.get("C1C_API_BASE_URL"):
                     jobs[job_id]["status"] = "error"
-                    jobs[job_id]["error"] = (
-                        "C1C_API_BASE_URL environment variable not set."
-                    )
+                    jobs[job_id][
+                        "error"
+                    ] = "C1C_API_BASE_URL environment variable not set."
                     return
 
                 jobs[job_id]["progress"] = "Fetching card data..."
@@ -67,10 +102,10 @@ def start_job(academic_unit, building, year, semester, from_time, selected_clear
             output = io.StringIO()
             export_to_csv(
                 people,
-                academic_unit,
+                unit,
                 config_path=CONFIG_PATH,
                 output_path=output,
-                clearances=selected_clearances,
+                clearances=params.get("selected_clearances"),
             )
             jobs[job_id]["csv"] = output.getvalue()
             jobs[job_id]["status"] = "done"
@@ -90,35 +125,73 @@ def index():
     semesters = get_semesters(config)
     buildings = get_buildings(config)
     clearances = get_clearance_locations(config)
+    programs = get_programs(config)
     return render_template(
         "index.html",
         academic_units=academic_units,
         semesters=semesters,
         buildings=buildings,
         clearances=clearances,
+        programs=programs,
     )
 
 
 @app.route("/generate", methods=["POST"])
 def generate():
-    academic_unit = request.form.get("academic_unit", "")
-    if academic_unit == "Other":
-        academic_unit = request.form.get("academic_unit_other", "")
-
-    building = request.form.get("building", "")
-    if building == "Other":
-        building = request.form.get("building_other", "")
-    year = request.form.get("year", "")
-    semester = request.form.get("semester", "")
-    from_time = request.form.get("from_time", "")
-
-    if not academic_unit or not building or not year or not semester:
-        return {"error": "Missing required fields"}, 400
-
+    mode = request.form.get("mode", "courses")
     selected_clearances = request.form.getlist("clearances") or None
-    job_id = start_job(
-        academic_unit, building, year, semester, from_time, selected_clearances
-    )
+
+    if mode == "programs":
+        program_codes = request.form.getlist("program_codes")
+        if not program_codes:
+            return {"error": "No program codes selected"}, 400
+
+        # Build code_to_role from config
+        code_to_role = {}
+        for prog in get_programs(config):
+            if prog.get("code"):
+                code_to_role[prog["code"]] = prog.get("role", "Program-enrolled")
+
+        # Derive academic unit from first selected program
+        unit = "Program"
+        for prog in get_programs(config):
+            if prog.get("code") in program_codes:
+                unit = prog.get("unit", "Program")
+                break
+
+        params = {
+            "mode": "programs",
+            "academic_unit": unit,
+            "program_codes": program_codes,
+            "code_to_role": code_to_role,
+            "selected_clearances": selected_clearances,
+        }
+    else:
+        academic_unit = request.form.get("academic_unit", "")
+        if academic_unit == "Other":
+            academic_unit = request.form.get("academic_unit_other", "")
+
+        building = request.form.get("building", "")
+        if building == "Other":
+            building = request.form.get("building_other", "")
+        year = request.form.get("year", "")
+        semester = request.form.get("semester", "")
+        from_time = request.form.get("from_time", "")
+
+        if not academic_unit or not building or not year or not semester:
+            return {"error": "Missing required fields"}, 400
+
+        params = {
+            "mode": "courses",
+            "academic_unit": academic_unit,
+            "building": building,
+            "year": year,
+            "semester": semester,
+            "from_time": from_time,
+            "selected_clearances": selected_clearances,
+        }
+
+    job_id = start_job(params)
     return {"job_id": job_id}
 
 
@@ -129,19 +202,27 @@ def progress(job_id):
         while True:
             job = jobs.get(job_id)
             if not job:
-                yield "data: " + json.dumps({"type": "error", "message": "Job not found"}) + "\n\n"
+                yield "data: " + json.dumps(
+                    {"type": "error", "message": "Job not found"}
+                ) + "\n\n"
                 return
 
             if job["status"] == "error":
-                yield "data: " + json.dumps({"type": "error", "message": job["error"]}) + "\n\n"
+                yield "data: " + json.dumps(
+                    {"type": "error", "message": job["error"]}
+                ) + "\n\n"
                 return
 
             if job["progress"] != last_progress:
                 last_progress = job["progress"]
-                yield "data: " + json.dumps({"type": "progress", "message": job["progress"]}) + "\n\n"
+                yield "data: " + json.dumps(
+                    {"type": "progress", "message": job["progress"]}
+                ) + "\n\n"
 
             if job["status"] == "done":
-                yield "data: " + json.dumps({"type": "done", "filename": job["filename"]}) + "\n\n"
+                yield "data: " + json.dumps(
+                    {"type": "done", "filename": job["filename"]}
+                ) + "\n\n"
                 return
 
             time.sleep(0.5)
