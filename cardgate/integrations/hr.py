@@ -24,7 +24,7 @@ async def _get_employees_async(hr_department: str) -> List[Person]:
     raw_employees = await departments.get_employees(
         departments_id, departments_key, hr_department
     )
-    campus_uids = departments.extract_campus_uids(raw_employees)
+    campus_uids = departments.extract_identifiers(raw_employees, "campus-uid")
 
     if not campus_uids:
         logger.info(f"No employees found for department: {hr_department}")
@@ -39,7 +39,7 @@ async def _get_employees_async(hr_department: str) -> List[Person]:
             data = await info.get(employees_id, employees_key, uid, "campus-uid")
             return uid, data
         except Exception as e:
-            logger.warning(f"Failed to fetch info for {uid}: {e}")
+            logger.warning(f"Failed to fetch info for {uid} (HTTP {getattr(e, 'status', '?')}): {e}")
             return uid, None
 
     tasks = [fetch_info(uid) for uid in campus_uids]
