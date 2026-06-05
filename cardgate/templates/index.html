@@ -10,7 +10,7 @@
     <div class="max-w-lg w-full mx-4">
         <h1 class="text-2xl font-bold mb-6 text-gray-800">Card Gate - Access Request Generator</h1>
 
-        <form action="/generate" method="POST" id="cardgate-form" class="space-y-4" onsubmit="return submitForm()">
+        <form action="/generate" method="POST" id="cardgate-form" class="space-y-4" onsubmit="submitForm(event)">
             <div>
                 <label for="academic_unit" class="block text-sm font-medium text-gray-700 mb-1">Academic Unit</label>
                 <select id="academic_unit" name="academic_unit" onchange="toggleOther()" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -96,75 +96,81 @@
         
         window.onload = setDefaultYear;
 
-        async function submitForm() {
+        async function submitForm(event) {
+            event.preventDefault();
             var loading = document.getElementById('loading');
             var progressText = document.getElementById('progress-text');
             var btn = document.getElementById('submit-btn');
-            
+
             loading.classList.remove('hidden');
             btn.disabled = true;
-            
+
             var form = document.getElementById('cardgate-form');
             var formData = new FormData(form);
-            
+
             try {
                 var response = await fetch('/generate', { method: 'POST', body: formData });
-                
+                var result = await response.json();
+
                 if (!response.ok) {
-                    var text = await response.text();
-                    alert('Error: ' + text);
-                    return false;
+                    alert('Error: ' + (result.error || response.statusText));
+                    btn.disabled = false;
+                    loading.classList.add('hidden');
+                    return;
                 }
-                
-                var reader = response.body.getReader();
-                var decoder = new TextDecoder();
-                var buffer = '';
-                
-                while (true) {
-                    var result = await reader.read();
-                    if (result.done) break;
-                    
-                    buffer += decoder.decode(result.value, { stream: true });
-                    var lines = buffer.split('\n');
-                    buffer = lines.pop();
-                    
-                    for (var line of lines) {
-                        if (!line.trim()) continue;
-                        try {
-                            var msg = JSON.parse(line);
-                            if (msg.type === 'progress') {
-                                progressText.textContent = msg.message;
-                            } else if (msg.type === 'done') {
-                                var binaryStr = atob(msg.csv);
-                                var bytes = new Uint8Array(binaryStr.length);
-                                for (var i = 0; i < binaryStr.length; i++) {
-                                    bytes[i] = binaryStr.charCodeAt(i);
-                                }
-                                var blob = new Blob([bytes], { type: 'text/csv;charset=utf-8' });
-                                var url = URL.createObjectURL(blob);
-                                var a = document.createElement('a');
-                                a.href = url;
-                                a.download = msg.filename;
-                                document.body.appendChild(a);
-                                a.click();
-                                document.body.removeChild(a);
-                                URL.revokeObjectURL(url);
-                            } else if (msg.type === 'error') {
-                                alert('Error: ' + msg.message);
-                            }
-                        } catch (e) {
-                            console.error('Failed to parse line:', line, e);
+
+                var source = new EventSource('/progress/' + result.job_id);
+
+                source.onmessage = function(event) {
+                    try {
+                        var msg = JSON.parse(event.data);
+                        if (msg.type === 'progress') {
+                            progressText.textContent = msg.message;
+                        } else if (msg.type === 'done') {
+                            source.close();
+                            downloadCSV(result.job_id, msg.filename);
+                        } else if (msg.type === 'error') {
+                            source.close();
+                            alert('Error: ' + msg.message);
+                            btn.disabled = false;
+                            loading.classList.add('hidden');
                         }
+                    } catch (e) {
+                        console.error('Failed to parse SSE message:', event.data, e);
                     }
-                }
+                };
+
+                source.onerror = function() {
+                    source.close();
+                    alert('Connection lost while processing');
+                    btn.disabled = false;
+                    loading.classList.add('hidden');
+                };
             } catch (e) {
                 alert('Network error: ' + e.message);
-            } finally {
                 btn.disabled = false;
                 loading.classList.add('hidden');
             }
-            
-            return false;
+        }
+
+        async function downloadCSV(jobId, filename) {
+            try {
+                var response = await fetch('/download/' + jobId);
+                var blob = await response.blob();
+                var url = URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            } catch (e) {
+                alert('Download failed: ' + e.message);
+            } finally {
+                document.getElementById('submit-btn').disabled = false;
+                document.getElementById('loading').classList.add('hidden');
+            }
         }
     </script>
 </body>
