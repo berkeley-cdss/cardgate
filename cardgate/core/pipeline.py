@@ -16,9 +16,9 @@ def get_programs(config: dict) -> List[dict]:
     return config.get("programs", [])
 
 
-def fetch_employees(academic_unit: str) -> List[Person]:
-    logger.info(f"Fetching HR employees for unit: {academic_unit}...")
-    employees = hr.get_employees(academic_unit)
+def fetch_employees(hr_department: str) -> List[Person]:
+    logger.info(f"Fetching HR employees for department: {hr_department}...")
+    employees = hr.get_employees(hr_department)
     logger.info(f"Total employees identified: {len(employees)}")
     return employees
 

@@ -13,10 +13,12 @@ from cardgate.core.clearances import (
     get_semesters,
     get_buildings,
     get_clearance_locations,
+    get_hr_department_codes,
 )
 from cardgate.core.pipeline import (
     export_to_csv,
     fetch_card_data,
+    fetch_employees,
     fetch_program_students,
     get_programs,
 )
@@ -44,7 +46,10 @@ def start_job(params):
         "error": None,
     }
 
-    if mode == "programs":
+    if mode == "employees":
+        hr_dept = params.get("hr_dept", "Unknown")
+        jobs[job_id]["filename"] = f"{hr_dept}-employees.csv"
+    elif mode == "programs":
         program_codes = params.get("program_codes", [])
         code_to_role = params.get("code_to_role", {})
         label = "-".join(program_codes[:3])
@@ -60,7 +65,11 @@ def start_job(params):
         try:
             jobs[job_id]["status"] = "processing"
 
-            if mode == "programs":
+            if mode == "employees":
+                jobs[job_id]["progress"] = "Querying HR for employees..."
+                people = fetch_employees(params.get("hr_dept", ""))
+                unit = params.get("hr_dept", "Employees")
+            elif mode == "programs":
                 jobs[job_id]["progress"] = "Querying SIS for program students..."
                 from cardgate.integrations import sis as sis_module
 
@@ -126,6 +135,7 @@ def index():
     buildings = get_buildings(config)
     clearances = get_clearance_locations(config)
     programs = get_programs(config)
+    hr_department_codes = get_hr_department_codes(config)
     return render_template(
         "index.html",
         academic_units=academic_units,
@@ -133,6 +143,7 @@ def index():
         buildings=buildings,
         clearances=clearances,
         programs=programs,
+        hr_department_codes=hr_department_codes,
     )
 
 
@@ -141,7 +152,20 @@ def generate():
     mode = request.form.get("mode", "courses")
     selected_clearances = request.form.getlist("clearances") or None
 
-    if mode == "programs":
+    if mode == "employees":
+        hr_dept = request.form.get("hr_dept", "")
+        if hr_dept == "Other":
+            hr_dept = request.form.get("hr_dept_other", "")
+
+        if not hr_dept:
+            return {"error": "Missing HR department code"}, 400
+
+        params = {
+            "mode": "employees",
+            "hr_dept": hr_dept,
+            "selected_clearances": selected_clearances,
+        }
+    elif mode == "programs":
         program_codes = request.form.getlist("program_codes")
         if not program_codes:
             return {"error": "No program codes selected"}, 400

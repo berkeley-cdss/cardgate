@@ -93,8 +93,8 @@ def courses(
 
 @app.command()
 def employees(
-    academic_unit: str = typer.Option(
-        ..., "--unit", help="Academic unit or department code (e.g., STAT)"
+    hr_dept: str = typer.Option(
+        ..., "--hr-dept", help="HR department code (e.g., PSTAT)"
     ),
     output_file: Optional[str] = typer.Option(
         None, "--output", "-o", help="Output CSV file path. Defaults to stdout."
@@ -112,15 +112,15 @@ def employees(
     ),
 ):
     """
-    Generate card key access spreadsheets for long-term employees (faculty, staff, postdocs) in an academic unit.
+    Generate card key access spreadsheets for employees in an HR department.
     """
     logger.info(f"Starting pipeline for employees...")
-    people = fetch_employees(academic_unit)
+    people = fetch_employees(hr_dept)
     if people:
         fetch_card_data(people)
     export_to_csv(
         people,
-        academic_unit,
+        hr_dept,
         config_file,
         output_path=output_file,
         clearances=clearances.split(",") if clearances else None,

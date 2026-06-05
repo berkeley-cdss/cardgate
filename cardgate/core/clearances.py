@@ -36,3 +36,11 @@ def get_buildings(config: dict) -> List[str]:
     """Returns the list of building codes for the web dropdown."""
     web_config = config.get("web", {})
     return web_config.get("buildings", ["Gateway", "Evans", "Other"])
+
+
+def get_hr_department_codes(config: dict) -> List[str]:
+    """Returns the list of HR department codes for the employees dropdown."""
+    web_config = config.get("web", {})
+    return web_config.get(
+        "hr_department_codes", ["PSTAT", "COMPSCI", "EECS", "CDSS", "Other"]
+    )
