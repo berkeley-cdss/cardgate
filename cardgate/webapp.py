@@ -294,12 +294,22 @@ def auth_error():
     return render_template("error.html", error=error)
 
 
+@app.errorhandler(404)
+def not_found(e):
+    return render_template("error.html", error="Page not found."), 404
+
+
+@app.errorhandler(500)
+def server_error(e):
+    return render_template("error.html", error="Internal server error."), 500
+
+
 @app.errorhandler(Exception)
 def handle_error(e):
     from werkzeug.exceptions import HTTPException
 
     if isinstance(e, HTTPException):
-        raise e
+        return render_template("error.html", error=str(e)), e.code
 
     logger.error(f"Unhandled error: {e}")
     return redirect(url_for("auth_error", error=str(e)))
