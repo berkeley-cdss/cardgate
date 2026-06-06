@@ -49,7 +49,7 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 oidc = init_oidc(app)
 
-CONFIG_PATH = "cardgate.yaml"
+CONFIG_PATH = os.environ.get("CARDGATE_CONFIG", "cardgate.yaml")
 config = load_cardgate_config(CONFIG_PATH)
 
 # In-memory job store
