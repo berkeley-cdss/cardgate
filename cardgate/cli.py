@@ -62,11 +62,11 @@ def courses(
         "--clearances",
         help="Comma-separated clearance names (defaults to all from config)",
     ),
-    config_file: Optional[str] = typer.Option(
-        "cardgate.yaml",
+    config_file: str = typer.Option(
+        os.environ.get("CARDGATE_CONFIG", "cardgate.yaml"),
         "--config",
         "-c",
-        help="Path to config YAML",
+        help="Path to config YAML (default: CARDGATE_CONFIG env var or cardgate.yaml)",
     ),
 ):
     """
@@ -104,11 +104,11 @@ def employees(
         "--clearances",
         help="Comma-separated clearance names (defaults to all from config)",
     ),
-    config_file: Optional[str] = typer.Option(
-        "cardgate.yaml",
+    config_file: str = typer.Option(
+        os.environ.get("CARDGATE_CONFIG", "cardgate.yaml"),
         "--config",
         "-c",
-        help="Path to config YAML",
+        help="Path to config YAML (default: CARDGATE_CONFIG env var or cardgate.yaml)",
     ),
 ):
     """
@@ -143,11 +143,11 @@ def programs(
         "--clearances",
         help="Comma-separated clearance names (defaults to all from config)",
     ),
-    config_file: Optional[str] = typer.Option(
-        "cardgate.yaml",
+    config_file: str = typer.Option(
+        os.environ.get("CARDGATE_CONFIG", "cardgate.yaml"),
         "--config",
         "-c",
-        help="Path to config YAML",
+        help="Path to config YAML (default: CARDGATE_CONFIG env var or cardgate.yaml)",
     ),
 ):
     """
