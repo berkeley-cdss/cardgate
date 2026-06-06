@@ -8,6 +8,11 @@
 </head>
 <body class="bg-gray-50 min-h-screen flex items-start justify-center pt-12">
     <div class="max-w-lg w-full mx-4">
+        {% if oidc_enabled %}
+        <div class="text-right mb-2">
+            <a href="{{ url_for('oidc_logout') }}" class="text-sm text-gray-500 hover:text-gray-700 underline">Logout</a>
+        </div>
+        {% endif %}
         <h1 class="text-2xl font-bold mb-6 text-gray-800">Card Gate - Access Request Generator</h1>
 
         <!-- Tab Bar -->

@@ -13,6 +13,11 @@ You will need credentials for the following services.
 - **Cal1Card** (card key numbers — production only; test defaults are built in)
   - `C1C_APP_ID` / `C1C_APP_KEY`
   - `C1C_API_BASE_URL` (optional; defaults to the test endpoint)
+- **CalNet OIDC** (web app authentication — optional for local dev, required for deployment)
+  - `CLIENT_ID` / `CLIENT_SECRET` — CalNet OIDC client credentials
+  - `CALNET_ENVIRONMENT` — `test` or `prod` (defaults to `prod`)
+  - `SECRET_KEY` — Flask session signing key (generate a random value)
+  - `BASE_URL` — public URL of the deployed app
 
 ## Configuration
 
@@ -61,6 +66,13 @@ SIS_ENROLLMENTS_KEY=your_enrollments_key
 C1C_APP_ID=your_app_id
 C1C_APP_KEY=your_app_key
 C1C_API_BASE_URL=https://your-production-endpoint.berkeley.edu
+
+# CalNet OIDC (omit for local development — web app runs without authentication)
+# CLIENT_ID=your_calnet_oidc_client_id
+# CLIENT_SECRET=your_calnet_oidc_client_secret
+# CALNET_ENVIRONMENT=prod
+# SECRET_KEY=<generate-a-random-key>
+# BASE_URL=https://your-deployment.example.com
 ```
 
 Both the CLI and the web app load this file automatically.
@@ -71,6 +83,6 @@ Both the CLI and the web app load this file automatically.
 python3 cardgate/webapp.py
 ```
 
-Open `http://localhost:5000` in a browser.
+Open `http://localhost:5000` in a browser. If `CLIENT_ID` and `CLIENT_SECRET` are not set, the web app runs without authentication for local development. When OIDC is configured, all routes except the login page require CalNet authentication.
 
 The web app provides the same functionality as the CLI through a browser form. See [Web Application](web.md) for full details on form fields, output, and configuration.

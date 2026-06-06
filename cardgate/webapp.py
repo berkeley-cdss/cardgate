@@ -1,12 +1,15 @@
 import io
 import json
+import logging
 import os
 import threading
 import time
 import uuid
-from flask import Flask, render_template, request, Response, send_file
+from flask import Flask, redirect, render_template, request, Response, send_file, url_for
+from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
 
+from cardgate.auth import init_oidc, login_required
 from cardgate.core.clearances import (
     load_cardgate_config,
     get_academic_units,
@@ -23,9 +26,15 @@ from cardgate.core.pipeline import (
     get_programs,
 )
 
+logger = logging.getLogger(__name__)
+
 load_dotenv()
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key-change-in-production")
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
+oidc = init_oidc(app)
 
 CONFIG_PATH = "cardgate.yaml"
 config = load_cardgate_config(CONFIG_PATH)
@@ -130,6 +139,9 @@ def start_job(params):
 
 @app.route("/")
 def index():
+    if oidc is not None and not oidc.is_authenticated():
+        return render_template("login.html")
+
     academic_units = get_academic_units(config)
     semesters = get_semesters(config)
     buildings = get_buildings(config)
@@ -144,10 +156,12 @@ def index():
         clearances=clearances,
         programs=programs,
         hr_department_codes=hr_department_codes,
+        oidc_enabled=app.config.get("OIDC_ENABLED", False),
     )
 
 
 @app.route("/generate", methods=["POST"])
+@login_required(oidc)
 def generate():
     mode = request.form.get("mode", "courses")
     selected_clearances = request.form.getlist("clearances") or None
@@ -220,6 +234,7 @@ def generate():
 
 
 @app.route("/progress/<job_id>")
+@login_required(oidc)
 def progress(job_id):
     def stream():
         last_progress = ""
@@ -255,6 +270,7 @@ def progress(job_id):
 
 
 @app.route("/download/<job_id>")
+@login_required(oidc)
 def download(job_id):
     job = jobs.get(job_id)
     if not job or job["status"] != "done" or job["csv"] is None:
@@ -270,6 +286,23 @@ def download(job_id):
         as_attachment=True,
         download_name=job["filename"],
     )
+
+
+@app.route("/auth-error")
+def auth_error():
+    error = request.args.get("error", "An authentication error occurred. Please try again.")
+    return render_template("error.html", error=error)
+
+
+@app.errorhandler(Exception)
+def handle_error(e):
+    from werkzeug.exceptions import HTTPException
+
+    if isinstance(e, HTTPException):
+        raise e
+
+    logger.error(f"Unhandled error: {e}")
+    return redirect(url_for("auth_error", error=str(e)))
 
 
 if __name__ == "__main__":
