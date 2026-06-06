@@ -56,7 +56,7 @@ config = load_cardgate_config(CONFIG_PATH)
 jobs = {}
 
 
-EXEMPT_ROUTES = {"logout", "auth_error", "static"}
+EXEMPT_ROUTES = {"oidc_logout", "auth_error", "static"}
 
 
 @app.before_request
