@@ -18,11 +18,7 @@ CALNET_SERVERS = {
 DEFAULT_SCOPES = [
     "openid",
     "profile",
-    "email",
     "berkeley_edu_default",
-    "berkeley_edu_groups",
-    "berkeley_edu_dept_number",
-    "berkeley_edu_ou",
 ]
 
 
