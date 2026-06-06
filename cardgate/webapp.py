@@ -56,6 +56,9 @@ config = load_cardgate_config(CONFIG_PATH)
 jobs = {}
 
 
+EXEMPT_ROUTES = {"logout", "auth_error", "static"}
+
+
 @app.before_request
 def require_allowed_group():
     if oidc is None:
@@ -64,13 +67,16 @@ def require_allowed_group():
         return
     if not oidc.is_authenticated():
         return
+    if request.endpoint in EXEMPT_ROUTES:
+        return
     allowed = get_allowed_groups(config)
     if not allowed:
         return
     if not user_has_allowed_group(oidc, allowed):
         return (
             render_template(
-                "error.html", error="You are not authorized to access this application."
+                "error.html",
+                error="You are not authorized to access this application.",
             ),
             403,
         )
