@@ -1,8 +1,14 @@
 import os
 import logging
 from flask_oidc import FlaskOIDC
+from joserfc.registry import JWS_HEADER_REGISTRY, HeaderParameter
 
 logger = logging.getLogger(__name__)
+
+# CalNet includes a non-standard "client_id" claim in the JWT header of its
+# ID tokens. Register it as an accepted JWS header parameter so joserfc
+# does not reject it during ID token validation.
+JWS_HEADER_REGISTRY.setdefault("client_id", HeaderParameter("Client ID", "str"))
 
 CALNET_SERVERS = {
     "test": "https://auth-test.berkeley.edu",
