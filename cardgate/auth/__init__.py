@@ -59,3 +59,48 @@ def login_required(oidc):
         return lambda f: f
 
     return oidc.login_required
+
+
+def get_user_groups(oidc):
+    """
+    Returns the list of group strings from the current OIDC session, or None.
+    Group strings are LDAP DNs like
+    'cn=edu:berkeley:app:cardgate:users,ou=campus groups,dc=berkeley,dc=edu'.
+    """
+    if oidc is None:
+        return None
+    user = oidc.get_user()
+    if user and "groups" in user:
+        groups = user["groups"]
+        if isinstance(groups, str):
+            return [g.strip() for g in groups.split(",")]
+        if isinstance(groups, list):
+            return groups
+    return None
+
+
+def user_has_allowed_group(oidc, allowed_groups):
+    """
+    Checks whether the currently authenticated user belongs to at least one
+    of the allowed groups.
+
+    Args:
+        oidc: The FlaskOIDC instance (or None if auth is disabled).
+        allowed_groups: List of full group DN strings from the groups claim.
+
+    Returns:
+        True if the user is in an allowed group, OIDC is not configured, or
+        allowed_groups is empty.
+    """
+    if oidc is None or not allowed_groups:
+        return True
+
+    groups = get_user_groups(oidc)
+    if not groups:
+        return False
+
+    allowed = set(allowed_groups)
+    for g in groups:
+        if g in allowed:
+            return True
+    return False

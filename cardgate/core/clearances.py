@@ -44,3 +44,9 @@ def get_hr_department_codes(config: dict) -> List[str]:
     return web_config.get(
         "hr_department_codes", ["PSTAT", "COMPSCI", "EECS", "CDSS", "Other"]
     )
+
+
+def get_allowed_groups(config: dict) -> List[str]:
+    """Returns the list of allowed Grouper paths for web app access."""
+    web_config = config.get("web", {})
+    return web_config.get("allowed_groups", [])

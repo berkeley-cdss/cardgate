@@ -5,17 +5,30 @@ import os
 import threading
 import time
 import uuid
-from flask import Flask, redirect, render_template, request, Response, send_file, url_for
+from flask import (
+    Flask,
+    redirect,
+    render_template,
+    request,
+    Response,
+    send_file,
+    url_for,
+)
 from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
 
-from cardgate.auth import init_oidc, login_required
+from cardgate.auth import (
+    init_oidc,
+    login_required,
+    user_has_allowed_group,
+)
 from cardgate.core.clearances import (
     load_cardgate_config,
     get_academic_units,
     get_semesters,
     get_buildings,
     get_clearance_locations,
+    get_allowed_groups,
     get_hr_department_codes,
 )
 from cardgate.core.pipeline import (
@@ -41,6 +54,26 @@ config = load_cardgate_config(CONFIG_PATH)
 
 # In-memory job store
 jobs = {}
+
+
+@app.before_request
+def require_allowed_group():
+    if oidc is None:
+        return
+    if not app.config.get("OIDC_ENABLED", False):
+        return
+    if not oidc.is_authenticated():
+        return
+    allowed = get_allowed_groups(config)
+    if not allowed:
+        return
+    if not user_has_allowed_group(oidc, allowed):
+        return (
+            render_template(
+                "error.html", error="You are not authorized to access this application."
+            ),
+            403,
+        )
 
 
 def start_job(params):
@@ -290,7 +323,9 @@ def download(job_id):
 
 @app.route("/auth-error")
 def auth_error():
-    error = request.args.get("error", "An authentication error occurred. Please try again.")
+    error = request.args.get(
+        "error", "An authentication error occurred. Please try again."
+    )
     return render_template("error.html", error=error)
 
 
