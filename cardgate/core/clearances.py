@@ -20,10 +20,14 @@ def get_clearance_locations(config: dict) -> List[str]:
     return config.get("clearances", [])
 
 
-def get_academic_units(config: dict) -> List[str]:
-    """Returns the list of academic units for the web dropdown."""
+def get_academic_units(config: dict) -> list:
+    """Returns the list of academic units for the web dropdown.
+    'Other' is always appended as an implicit choice.
+    """
     web_config = config.get("web", {})
-    return web_config.get("academic_units", ["STAT", "COMPSCI", "EECS", "CDSS"])
+    units = list(web_config.get("academic_units", []))
+    units.append("Other")
+    return units
 
 
 def get_semesters(config: dict) -> List[str]:
@@ -32,18 +36,24 @@ def get_semesters(config: dict) -> List[str]:
     return web_config.get("semesters", ["spring", "summer", "fall"])
 
 
-def get_buildings(config: dict) -> List[str]:
-    """Returns the list of building codes for the web dropdown."""
+def get_buildings(config: dict) -> list:
+    """Returns the list of building codes for the web dropdown.
+    'Other' is always appended as an implicit choice.
+    """
     web_config = config.get("web", {})
-    return web_config.get("buildings", ["Gateway", "Evans", "Other"])
+    bldgs = list(web_config.get("buildings", []))
+    bldgs.append("Other")
+    return bldgs
 
 
-def get_hr_department_codes(config: dict) -> List[str]:
-    """Returns the list of HR department codes for the employees dropdown."""
+def get_hr_department_codes(config: dict) -> list:
+    """Returns the list of HR department codes for the employees dropdown.
+    'Other' is always appended as an implicit choice.
+    """
     web_config = config.get("web", {})
-    return web_config.get(
-        "hr_department_codes", ["PSTAT", "COMPSCI", "EECS", "CDSS", "Other"]
-    )
+    codes = list(web_config.get("hr_department_codes", []))
+    codes.append("Other")
+    return codes
 
 
 def get_allowed_groups(config: dict) -> List[str]:
