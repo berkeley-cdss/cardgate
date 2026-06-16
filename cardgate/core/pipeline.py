@@ -16,11 +16,17 @@ def get_programs(config: dict) -> List[dict]:
     return config.get("programs", [])
 
 
-def fetch_employees(hr_department: str) -> List[Person]:
-    logger.info(f"Fetching HR employees for department: {hr_department}...")
-    employees = hr.get_employees(hr_department)
-    logger.info(f"Total employees identified: {len(employees)}")
-    return employees
+def fetch_employees(hr_departments: List[str]) -> List[Person]:
+    seen: Dict[str, Person] = {}
+    for dept in hr_departments:
+        logger.info(f"Fetching HR employees for department: {dept}...")
+        for p in hr.get_employees(dept):
+            key = p.uid or p.id
+            if key not in seen:
+                seen[key] = p
+    people = list(seen.values())
+    logger.info(f"Total unique employees identified: {len(people)}")
+    return people
 
 
 def fetch_program_students(

@@ -47,13 +47,11 @@ def get_buildings(config: dict) -> list:
 
 
 def get_hr_department_codes(config: dict) -> list:
-    """Returns the list of HR department codes for the employees dropdown.
-    'Other' is always appended as an implicit choice.
+    """Returns the list of HR department codes for the employees multi-select.
+    Custom codes can be entered via the separate text input.
     """
     web_config = config.get("web", {})
-    codes = list(web_config.get("hr_department_codes", []))
-    codes.append("Other")
-    return codes
+    return list(web_config.get("hr_department_codes", []))
 
 
 def get_allowed_groups(config: dict) -> List[str]:

@@ -115,7 +115,7 @@ def employees(
     Generate card key access spreadsheets for employees in an HR department.
     """
     logger.info(f"Starting pipeline for employees...")
-    people = fetch_employees(hr_dept)
+    people = fetch_employees([hr_dept])
     if people:
         fetch_card_data(people)
     export_to_csv(

@@ -95,8 +95,9 @@ def start_job(params):
     }
 
     if mode == "employees":
-        hr_dept = params.get("hr_dept", "Unknown")
-        jobs[job_id]["filename"] = f"{hr_dept}-employees.csv"
+        hr_depts = params.get("hr_depts", [])
+        label = "-".join(hr_depts[:3])
+        jobs[job_id]["filename"] = f"{label}-employees.csv"
     elif mode == "programs":
         program_codes = params.get("program_codes", [])
         code_to_role = params.get("code_to_role", {})
@@ -115,8 +116,8 @@ def start_job(params):
 
             if mode == "employees":
                 jobs[job_id]["progress"] = "Querying HR for employees..."
-                people = fetch_employees(params.get("hr_dept", ""))
-                unit = params.get("hr_dept", "Employees")
+                people = fetch_employees(params.get("hr_depts", []))
+                unit = "-".join(params.get("hr_depts", [])[:3]) or "Employees"
             elif mode == "programs":
                 jobs[job_id]["progress"] = "Querying SIS for program students..."
                 from cardgate.integrations import sis as sis_module
@@ -206,16 +207,21 @@ def generate():
     selected_clearances = request.form.getlist("clearances") or None
 
     if mode == "employees":
-        hr_dept = request.form.get("hr_dept", "")
-        if hr_dept == "Other":
-            hr_dept = request.form.get("hr_dept_other", "")
+        hr_depts = request.form.getlist("hr_depts")
+        other_raw = request.form.get("hr_dept_other", "")
+        if other_raw:
+            extra = [c.strip() for c in other_raw.split(",") if c.strip()]
+            hr_depts.extend(extra)
 
-        if not hr_dept:
-            return {"error": "Missing HR department code"}, 400
+        if not hr_depts:
+            return {"error": "No HR departments selected"}, 400
+
+        seen = set()
+        hr_depts = [c for c in hr_depts if not (c in seen or seen.add(c))]
 
         params = {
             "mode": "employees",
-            "hr_dept": hr_dept,
+            "hr_depts": hr_depts,
             "selected_clearances": selected_clearances,
         }
     elif mode == "programs":
