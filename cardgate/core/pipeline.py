@@ -20,7 +20,12 @@ def fetch_employees(hr_departments: List[str]) -> List[Person]:
     seen: Dict[str, Person] = {}
     for dept in hr_departments:
         logger.info(f"Fetching HR employees for department: {dept}...")
-        for p in hr.get_employees(dept):
+        try:
+            employees = hr.get_employees(dept)
+        except Exception as e:
+            logger.warning(f"Skipping department {dept}: {e}")
+            continue
+        for p in employees:
             key = p.uid or p.id
             if key not in seen:
                 seen[key] = p
