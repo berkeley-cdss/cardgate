@@ -26,6 +26,7 @@ def fetch_employees(hr_departments: List[str]) -> List[Person]:
             logger.warning(f"Skipping department {dept}: {e}")
             continue
         for p in employees:
+            p.department = dept
             key = p.uid or p.id
             if key not in seen:
                 seen[key] = p
@@ -173,7 +174,7 @@ def export_to_csv(
                 person.last_name,
                 person.first_name,
                 person.middle_initial,
-                academic_unit,
+                person.department or academic_unit,
                 person.id,
                 person.lowprox_number or "",  # 6 digit (Low Frequency)
                 person.seos_number or "",  # 7 digit (High Frequency / seos)
