@@ -220,8 +220,18 @@ def generate():
         }
     elif mode == "programs":
         program_codes = request.form.getlist("program_codes")
+        other_raw = request.form.get("program_codes_other", "")
+        if other_raw:
+            extra = [c.strip() for c in other_raw.split(",") if c.strip()]
+            program_codes.extend(extra)
+
         if not program_codes:
             return {"error": "No program codes selected"}, 400
+
+        seen = set()
+        program_codes = [
+            c for c in program_codes if not (c in seen or seen.add(c))
+        ]
 
         # Build code_to_role from config
         code_to_role = {}
