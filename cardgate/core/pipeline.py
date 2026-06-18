@@ -165,6 +165,9 @@ def export_to_csv(
 
     is_file_like = hasattr(output_path, "write")
 
+    # People with any card data first, those with none at bottom
+    people.sort(key=lambda p: 0 if (p.lowprox_number or p.seos_number) else 1)
+
     def _write_rows(writer):
         writer.writerow(headers)
 
