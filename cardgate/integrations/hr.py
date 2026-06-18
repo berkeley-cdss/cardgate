@@ -89,8 +89,15 @@ def _build_person(uid: str, data: dict) -> Person:
     if not first_name or not last_name:
         return None
 
+    # Use hr-employee-id as the person's primary ID; leave blank if unavailable
+    eid = ""
+    for ident in data.get("identifiers", []):
+        if ident.get("type") == "hr-employee-id":
+            eid = ident.get("id", "")
+            break
+
     return Person(
-        id=uid,
+        id=eid,
         uid=uid,
         first_name=first_name,
         last_name=last_name,

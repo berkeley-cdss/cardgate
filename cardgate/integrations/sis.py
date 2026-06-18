@@ -84,7 +84,7 @@ async def _get_program_students_async(
     people = []
     for student in deduped:
         uid = extract_campus_uid(student)
-        sid = extract_student_id(student) or uid
+        sid = extract_student_id(student) or ""
         raw_name = extract_name(student)
         email = extract_email(student)
 
@@ -345,7 +345,7 @@ async def _get_course_enrolled_students_async(
                 "student.identifiers[?type=='student-id'].id | [0]", enr
             )
             uid_search = enrollments.enrollment_campus_uid(enr)
-            sid = sid_search or uid_search
+            sid = sid_search or ""
 
             if not sid or sid in seen_uids:
                 continue
