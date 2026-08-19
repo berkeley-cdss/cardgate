@@ -1,3 +1,4 @@
+import csv
 import os
 import typer
 import logging
@@ -9,8 +10,10 @@ from cardgate.core.pipeline import (
     fetch_employees,
     fetch_program_students,
     fetch_course_people,
+    fetch_people_by_uids,
     fetch_card_data,
     export_to_csv,
+    extract_uids_from_csv_rows,
     get_programs,
 )
 from cardgate.core.clearances import load_cardgate_config
@@ -169,6 +172,77 @@ def programs(
     export_to_csv(
         people,
         academic_unit,
+        config_file,
+        output_path=output_file,
+        clearances=clearances.split(",") if clearances else None,
+    )
+
+
+@app.command()
+def uids(
+    uid: List[str] = typer.Option(
+        [], "--uid", help="CalNet UID to look up (can specify multiple)"
+    ),
+    uid_file: Optional[str] = typer.Option(
+        None,
+        "--uid-file",
+        help="Path to a file with one UID per line, or a CSV with a 'uid' column",
+    ),
+    output_file: Optional[str] = typer.Option(
+        None, "--output", "-o", help="Output CSV file path. Defaults to stdout."
+    ),
+    clearances: Optional[str] = typer.Option(
+        None,
+        "--clearances",
+        help="Comma-separated clearance names (defaults to all from config)",
+    ),
+    config_file: str = typer.Option(
+        os.environ.get("CARDGATE_CONFIG", "cardgate.yaml"),
+        "--config",
+        "-c",
+        help="Path to config YAML (default: CARDGATE_CONFIG env var or cardgate.yaml)",
+    ),
+):
+    """
+    Generate card key access spreadsheets for a list of CalNet UIDs, resolved
+    via SIS (students) then HR (employees).
+    """
+    seen = set()
+    uids_list: List[str] = []
+
+    def add_uid(val: str):
+        cleaned = val.strip()
+        if cleaned and cleaned.lower() != "uid" and cleaned not in seen:
+            seen.add(cleaned)
+            uids_list.append(cleaned)
+
+    for u in uid:
+        add_uid(u)
+
+    if uid_file:
+        with open(uid_file, "r", newline="", encoding="utf-8-sig") as f:
+            rows = list(csv.reader(f))
+        for candidate in extract_uids_from_csv_rows(rows):
+            add_uid(candidate)
+
+    if not uids_list:
+        logger.error("No UIDs provided. Use --uid or --uid-file.")
+        raise typer.Exit(code=1)
+
+    logger.info(f"Starting pipeline for {len(uids_list)} UID(s)...")
+    people = fetch_people_by_uids(uids_list)
+
+    if not people:
+        logger.error(
+            f"None of the {len(uids_list)} UID(s) provided could be resolved "
+            "to an employee or student record."
+        )
+        raise typer.Exit(code=1)
+
+    fetch_card_data(people)
+    export_to_csv(
+        people,
+        "UIDs",
         config_file,
         output_path=output_file,
         clearances=clearances.split(",") if clearances else None,

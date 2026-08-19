@@ -78,6 +78,67 @@ def fetch_course_people(
     return final_people
 
 
+def fetch_people_by_uids(uids: List[str]) -> List[Person]:
+    """
+    Resolve a list of CalNet UIDs to Person records.
+
+    Tries SIS (students) first with a single batched lookup, then falls back
+    to HR (employees) per-UID for any UIDs SIS didn't resolve. UIDs that
+    match neither system are dropped and logged, not included as blank
+    placeholder rows.
+    """
+    logger.info(f"Resolving {len(uids)} UID(s)...")
+
+    resolved: Dict[str, Person] = {}
+    try:
+        for p in sis.get_students_by_uids(uids):
+            if p.uid:
+                resolved[p.uid] = p
+    except Exception as e:
+        logger.warning(f"SIS UID lookup failed: {e}")
+
+    remaining = [u for u in uids if u not in resolved]
+    if remaining:
+        try:
+            for p in hr.get_employees_by_uids(remaining):
+                if p.uid:
+                    resolved[p.uid] = p
+        except Exception as e:
+            logger.warning(f"HR UID lookup failed: {e}")
+
+    people = [resolved[u] for u in uids if u in resolved]
+    unresolved = [u for u in uids if u not in resolved]
+    if unresolved:
+        logger.warning(
+            f"Could not resolve {len(unresolved)} of {len(uids)} UID(s) to a "
+            f"person: {', '.join(unresolved)}"
+        )
+
+    logger.info(f"Resolved {len(people)} of {len(uids)} UID(s) to a person.")
+    return people
+
+
+def extract_uids_from_csv_rows(rows: List[List[str]]) -> List[str]:
+    """
+    Given CSV rows (as returned by csv.reader), extract candidate UID
+    strings.
+
+    If the first row has a 'uid' column (case-insensitive), only that
+    column's values are read from the remaining rows. Otherwise, every
+    row's first column is treated as a UID (one per line). Values are
+    stripped but not deduplicated or filtered for emptiness.
+    """
+    if not rows:
+        return []
+
+    header = [cell.strip().lower() for cell in rows[0]]
+    if "uid" in header:
+        uid_col = header.index("uid")
+        return [row[uid_col].strip() for row in rows[1:] if uid_col < len(row)]
+    else:
+        return [row[0].strip() for row in rows if row]
+
+
 import concurrent.futures
 
 

@@ -7,6 +7,25 @@ from cardgate.models import Person
 logger = logging.getLogger(__name__)
 
 
+async def _fetch_info_for_uids(employees_id: str, employees_key: str, uids: List[str]):
+    """Concurrently fetch HR 'info' records for a list of campus UIDs.
+
+    Returns a list of (uid, data) tuples; data is None for UIDs that failed.
+    """
+    from ucbhr import info
+
+    async def fetch_info(uid: str):
+        try:
+            data = await info.get(employees_id, employees_key, uid, "campus-uid")
+            return uid, data
+        except Exception as e:
+            logger.warning(f"Failed to fetch info for {uid} (HTTP {getattr(e, 'status', '?')}): {e}")
+            return uid, None
+
+    tasks = [fetch_info(uid) for uid in uids]
+    return await asyncio.gather(*tasks)
+
+
 async def _get_employees_async(hr_department: str) -> List[Person]:
     employees_id = os.getenv("UCBHR_EMPLOYEES_ID")
     employees_key = os.getenv("UCBHR_EMPLOYEES_KEY")
@@ -19,7 +38,7 @@ async def _get_employees_async(hr_department: str) -> List[Person]:
             "UCBHR_DEPARTMENTS_ID, and UCBHR_DEPARTMENTS_KEY environment variables."
         )
 
-    from ucbhr import departments, info
+    from ucbhr import departments
 
     raw_employees = await departments.get_employees(
         departments_id, departments_key, hr_department
@@ -34,16 +53,7 @@ async def _get_employees_async(hr_department: str) -> List[Person]:
         f"Found {len(campus_uids)} employees in {hr_department}. Fetching info..."
     )
 
-    async def fetch_info(uid: str):
-        try:
-            data = await info.get(employees_id, employees_key, uid, "campus-uid")
-            return uid, data
-        except Exception as e:
-            logger.warning(f"Failed to fetch info for {uid} (HTTP {getattr(e, 'status', '?')}): {e}")
-            return uid, None
-
-    tasks = [fetch_info(uid) for uid in campus_uids]
-    results = await asyncio.gather(*tasks)
+    results = await _fetch_info_for_uids(employees_id, employees_key, campus_uids)
 
     people = []
     for uid, data in results:
@@ -113,3 +123,36 @@ def get_employees(hr_department: str) -> List[Person]:
     """
     logger.debug(f"Fetching employees for HR department: {hr_department}")
     return asyncio.run(_get_employees_async(hr_department))
+
+
+async def _get_employees_by_uids_async(uids: List[str]) -> List[Person]:
+    employees_id = os.getenv("UCBHR_EMPLOYEES_ID")
+    employees_key = os.getenv("UCBHR_EMPLOYEES_KEY")
+
+    if not employees_id or not employees_key:
+        raise ValueError(
+            "Missing HR API credentials. Set UCBHR_EMPLOYEES_ID and "
+            "UCBHR_EMPLOYEES_KEY environment variables."
+        )
+
+    results = await _fetch_info_for_uids(employees_id, employees_key, uids)
+
+    people = []
+    for uid, data in results:
+        if not data:
+            continue
+        person = _build_person(uid, data)
+        if person:
+            people.append(person)
+
+    return people
+
+
+def get_employees_by_uids(uids: List[str]) -> List[Person]:
+    """
+    Query HR directly for a list of CalNet UIDs, independent of department roster.
+    """
+    if not uids:
+        return []
+    logger.debug(f"Fetching HR info for {len(uids)} UID(s)")
+    return asyncio.run(_get_employees_by_uids_async(uids))

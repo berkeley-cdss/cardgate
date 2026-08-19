@@ -1,3 +1,4 @@
+import csv
 import io
 import json
 import logging
@@ -33,8 +34,10 @@ from cardgate.core.clearances import (
 )
 from cardgate.core.pipeline import (
     export_to_csv,
+    extract_uids_from_csv_rows,
     fetch_card_data,
     fetch_employees,
+    fetch_people_by_uids,
     fetch_program_students,
     get_programs,
 )
@@ -103,6 +106,8 @@ def start_job(params):
         code_to_role = params.get("code_to_role", {})
         label = "-".join(program_codes[:3])
         jobs[job_id]["filename"] = f"{label}.csv"
+    elif mode == "uids":
+        jobs[job_id]["filename"] = "uid-access-request.csv"
     else:
         unit = params.get("academic_unit", "Unknown")
         building = params.get("building", "Unknown")
@@ -126,6 +131,20 @@ def start_job(params):
                     program_codes, code_to_role=code_to_role
                 )
                 unit = params.get("academic_unit", "Program")
+            elif mode == "uids":
+                uids = params.get("uids", [])
+                jobs[job_id]["progress"] = "Resolving UIDs..."
+                people = fetch_people_by_uids(uids)
+
+                if not people:
+                    jobs[job_id]["status"] = "error"
+                    jobs[job_id]["error"] = (
+                        f"None of the {len(uids)} UID(s) provided could be "
+                        "resolved to an employee or student record."
+                    )
+                    return
+
+                unit = "UIDs"
             else:
                 jobs[job_id]["progress"] = "Querying SIS..."
                 from cardgate.integrations import sis as sis_module
@@ -257,6 +276,49 @@ def generate():
             "academic_unit": unit,
             "program_codes": program_codes,
             "code_to_role": code_to_role,
+            "selected_clearances": selected_clearances,
+        }
+    elif mode == "uids":
+        raw_uids = []
+        seen = set()
+
+        def add_uid(val):
+            cleaned = val.strip()
+            # Ignore empty strings and common header titles
+            if cleaned and cleaned.lower() != "uid":
+                if cleaned not in seen:
+                    seen.add(cleaned)
+                    raw_uids.append(cleaned)
+
+        # Parse text box (supports newlines, commas, and spaces)
+        uid_text = request.form.get("uid_list", "")
+        if uid_text:
+            normalized = uid_text.replace("\n", ",").replace("\r", ",").replace(" ", ",")
+            for token in normalized.split(","):
+                add_uid(token)
+
+        # Parse uploaded file if provided
+        if "uid_file" in request.files:
+            file = request.files["uid_file"]
+            if file and file.filename != "":
+                try:
+                    # utf-8-sig strips a BOM if present (e.g. Excel "CSV UTF-8" exports)
+                    text = file.stream.read().decode("utf-8-sig")
+                except UnicodeDecodeError:
+                    return {
+                        "error": "Could not read uploaded file. Please save it as UTF-8 CSV."
+                    }, 400
+
+                rows = list(csv.reader(io.StringIO(text, newline=None)))
+                for candidate in extract_uids_from_csv_rows(rows):
+                    add_uid(candidate)
+
+        if not raw_uids:
+            return {"error": "No UIDs provided or file was empty"}, 400
+
+        params = {
+            "mode": "uids",
+            "uids": raw_uids,
             "selected_clearances": selected_clearances,
         }
     else:
