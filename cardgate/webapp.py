@@ -34,13 +34,13 @@ from cardgate.core.clearances import (
 )
 from cardgate.core.pipeline import (
     export_to_csv,
+    extract_uids_from_csv_rows,
     fetch_card_data,
     fetch_employees,
+    fetch_people_by_uids,
     fetch_program_students,
     get_programs,
 )
-
-from cardgate.models import Person
 
 logger = logging.getLogger(__name__)
 
@@ -132,9 +132,18 @@ def start_job(params):
                 )
                 unit = params.get("academic_unit", "Program")
             elif mode == "uids":
-                jobs[job_id]["progress"] = "Processing UIDs..."
                 uids = params.get("uids", [])
-                people = [Person(uid=u) for u in uids]
+                jobs[job_id]["progress"] = "Resolving UIDs..."
+                people = fetch_people_by_uids(uids)
+
+                if not people:
+                    jobs[job_id]["status"] = "error"
+                    jobs[job_id]["error"] = (
+                        f"None of the {len(uids)} UID(s) provided could be "
+                        "resolved to an employee or student record."
+                    )
+                    return
+
                 unit = "UIDs"
             else:
                 jobs[job_id]["progress"] = "Querying SIS..."
@@ -292,11 +301,17 @@ def generate():
         if "uid_file" in request.files:
             file = request.files["uid_file"]
             if file and file.filename != "":
-                stream = io.StringIO(file.stream.read().decode("utf-8"), newline=None)
-                reader = csv.reader(stream)
-                for row in reader:
-                    for cell in row:
-                        add_uid(cell)
+                try:
+                    # utf-8-sig strips a BOM if present (e.g. Excel "CSV UTF-8" exports)
+                    text = file.stream.read().decode("utf-8-sig")
+                except UnicodeDecodeError:
+                    return {
+                        "error": "Could not read uploaded file. Please save it as UTF-8 CSV."
+                    }, 400
+
+                rows = list(csv.reader(io.StringIO(text, newline=None)))
+                for candidate in extract_uids_from_csv_rows(rows):
+                    add_uid(candidate)
 
         if not raw_uids:
             return {"error": "No UIDs provided or file was empty"}, 400
