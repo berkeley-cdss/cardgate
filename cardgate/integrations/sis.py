@@ -13,12 +13,64 @@ logger = logging.getLogger(__name__)
 from sis import terms, classes, enrollments, sis as sis_core
 from sis.student import (
     get_students_by_plan_code,
+    get_students_by_id_list,
     deduplicate_students,
     extract_campus_uid,
     extract_student_id,
-    extract_name,
     extract_email,
 )
+
+
+def _extract_person_name(student: dict) -> Tuple[str, str, str]:
+    """Extract (first_name, last_name, middle_initial) from a student's
+    structured name records (preferring 'PRF' preferred name, falling back
+    to 'PRI' lived name), reading fields directly rather than parsing a
+    formatted 'Last, First' string. Mirrors hr._build_person's approach.
+    """
+    names = student.get("names", [])
+    pref_name = None
+    lived_name = None
+    for n in names:
+        code = n.get("type", {}).get("code")
+        if code == "PRF":
+            pref_name = n
+        elif code == "PRI":
+            lived_name = n
+
+    best_name = pref_name or lived_name or (names[0] if names else None)
+    if not best_name:
+        return "", "", ""
+
+    first_name = best_name.get("givenName", "")
+    last_name = best_name.get("familyName", "")
+    middle_name = best_name.get("middleName", "")
+    middle_initial = middle_name[0].upper() if middle_name else ""
+    return first_name, last_name, middle_initial
+
+
+def _build_student_person(student: dict, role: str) -> Optional[Person]:
+    """Build a Person from a raw SIS student record.
+
+    Returns None if the record lacks a campus UID or a resolvable name.
+    """
+    uid = extract_campus_uid(student)
+    if not uid:
+        return None
+
+    first_name, last_name, middle_initial = _extract_person_name(student)
+    if not first_name or not last_name:
+        logger.warning(f"Skipping SIS student {uid}: no resolvable name.")
+        return None
+
+    return Person(
+        id=extract_student_id(student) or "",
+        uid=uid,
+        first_name=first_name,
+        last_name=last_name,
+        middle_initial=middle_initial,
+        email=extract_email(student),
+        role=role,
+    )
 
 
 async def get_term_dates(term_id: str) -> Tuple[Optional[str], Optional[str]]:
@@ -84,21 +136,6 @@ async def _get_program_students_async(
     people = []
     for student in deduped:
         uid = extract_campus_uid(student)
-        sid = extract_student_id(student) or ""
-        raw_name = extract_name(student)
-        email = extract_email(student)
-
-        first_name, last_name, middle_initial = "", "", ""
-        if raw_name and "," in raw_name:
-            parts = raw_name.split(",", 1)
-            last_name = parts[0].strip()
-            first_part = parts[1].strip()
-            if " " in first_part:
-                fn_parts = first_part.split(" ", 1)
-                first_name = fn_parts[0]
-                middle_initial = fn_parts[1][0].upper()
-            else:
-                first_name = first_part
 
         # Determine role from the plan code that was matched
         plan_code = seen_uids.get(uid, "")
@@ -106,17 +143,9 @@ async def _get_program_students_async(
         if code_to_role and plan_code in code_to_role:
             role = code_to_role[plan_code]
 
-        people.append(
-            Person(
-                id=sid,
-                uid=uid,
-                first_name=first_name,
-                last_name=last_name,
-                middle_initial=middle_initial,
-                email=email,
-                role=role,
-            )
-        )
+        person = _build_student_person(student, role)
+        if person:
+            people.append(person)
 
     return people
 
@@ -136,6 +165,35 @@ def get_program_students(
     """
     logger.debug(f"Fetching program students for codes {program_codes}")
     return asyncio.run(_get_program_students_async(program_codes, code_to_role))
+
+
+async def _get_students_by_uids_async(uids: List[str]) -> List[Person]:
+    students_id = os.getenv("SIS_STUDENTS_ID")
+    students_key = os.getenv("SIS_STUDENTS_KEY")
+    if not students_id or not students_key:
+        raise ValueError("SIS_STUDENTS_ID or SIS_STUDENTS_KEY not set.")
+
+    raw_students = await get_students_by_id_list(
+        students_id, students_key, ",".join(uids), id_type="campus-uid"
+    )
+
+    people = []
+    for student in raw_students:
+        person = _build_student_person(student, role="UID List")
+        if person:
+            people.append(person)
+
+    return people
+
+
+def get_students_by_uids(uids: List[str]) -> List[Person]:
+    """
+    Query SIS for student records matching a list of CalNet UIDs.
+    """
+    if not uids:
+        return []
+    logger.debug(f"Fetching SIS info for {len(uids)} UID(s)")
+    return asyncio.run(_get_students_by_uids_async(uids))
 
 
 async def _get_course_enrolled_students_async(
