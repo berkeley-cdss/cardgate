@@ -198,7 +198,7 @@ def get_students_by_uids(uids: List[str]) -> List[Person]:
 
 async def _get_course_enrolled_students_async(
     academic_unit: str,
-    building: str,
+    building: Optional[str],
     year: Optional[int],
     semester: Optional[str],
     from_time: Optional[str] = None,
@@ -275,25 +275,30 @@ async def _get_course_enrolled_students_async(
             continue
 
         for section in sections:
-            meets_criteria = False
-            meetings = section.get("meetings", [])
-            for meeting in meetings:
-                location_desc = meeting.get("location", {}).get("description", "")
-
-                # Check building match
-                if building.lower() in location_desc.lower():
+            if building is None and target_time is None:
+                # No building or time filter: include every section
+                meets_criteria = True
+            else:
+                meets_criteria = False
+                for meeting in section.get("meetings", []):
+                    if building is not None:
+                        location_desc = meeting.get("location", {}).get(
+                            "description", ""
+                        )
+                        # Check building match
+                        if building.lower() not in location_desc.lower():
+                            continue
                     if target_time:
                         start_time_str = meeting.get("startTime")
-                        if start_time_str:
-                            try:
-                                meeting_time = datetime.time.fromisoformat(
-                                    start_time_str
-                                )
-                                if meeting_time >= target_time:
-                                    meets_criteria = True
-                                    break
-                            except ValueError:
-                                pass
+                        if not start_time_str:
+                            continue
+                        try:
+                            meeting_time = datetime.time.fromisoformat(start_time_str)
+                        except ValueError:
+                            continue
+                        if meeting_time >= target_time:
+                            meets_criteria = True
+                            break
                     else:
                         meets_criteria = True
                         break
@@ -376,8 +381,9 @@ async def _get_course_enrolled_students_async(
                         f"Could not extract staff for section {enrollments.section_id(section)}: {e}"
                     )
 
+    bldg_txt = f"meeting in {building}" if building else "(no building filter)"
     logger.debug(
-        f"Found {len(matching_section_ids)} sections meeting in {building}. Fetching enrollments concurrently..."
+        f"Found {len(matching_section_ids)} sections {bldg_txt}. Fetching enrollments concurrently..."
     )
 
     # 4. Get enrollments concurrently
@@ -471,13 +477,14 @@ async def _get_course_enrolled_students_async(
 
 def get_course_enrolled_students(
     academic_unit: str,
-    building: str,
+    building: Optional[str] = None,
     year: Optional[int] = None,
     semester: Optional[str] = None,
     from_time: Optional[str] = None,
 ) -> List[Person]:
     """
-    Query SIS for courses taught by unit in specific building, then get enrolled students.
+    Query SIS for courses taught by unit (optionally filtered by building),
+    then get enrolled students and course staff.
     """
     return asyncio.run(
         _get_course_enrolled_students_async(

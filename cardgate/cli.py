@@ -39,8 +39,15 @@ def courses(
     academic_unit: str = typer.Option(
         ..., "--unit", help="Academic unit or department code (e.g., STAT)"
     ),
-    building: str = typer.Option(
-        ..., "--building", help="Building name to filter courses (e.g., Evans)"
+    building: Optional[str] = typer.Option(
+        None,
+        "--building",
+        help="Building name to filter courses (e.g., Evans). Omit to include all buildings.",
+    ),
+    role: str = typer.Option(
+        "all",
+        "--role",
+        help="People to include: staff, students, or all",
     ),
     year: Optional[int] = typer.Option(
         None,
@@ -73,10 +80,18 @@ def courses(
     ),
 ):
     """
-    Generate card key access spreadsheets for course-enrolled students and course-staff in a specific building.
+    Generate card key access spreadsheets for course-enrolled students and
+    course-staff for an academic unit, optionally filtered by building and/or
+    section start time.
     """
+    if role not in ("staff", "students", "all"):
+        logger.error("Invalid --role value. Use staff, students, or all.")
+        raise typer.Exit(code=1)
+
     logger.info(f"Starting pipeline for courses...")
-    people = fetch_course_people(academic_unit, building, year, semester, from_time)
+    people = fetch_course_people(
+        academic_unit, building, year, semester, from_time, role=role
+    )
 
     if not os.path.exists(config_file):
         logger.warning(f"Config file not found: {config_file}")
