@@ -7,7 +7,7 @@ allow-direct-references = true
 
 [project]
 name = "cardgate"
-version = "0.1.0"
+version = "0.2.0"
 description = "Generate card key access spreadsheets for UC Berkeley departments"
 authors = [{ name = "Ryan Lovett", email = "rylo@berkeley.edu" }]
 dependencies = [
