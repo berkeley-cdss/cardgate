@@ -306,7 +306,7 @@ async def _get_course_enrolled_students_async(
             if meets_criteria:
                 matching_section_ids.append(enrollments.section_id(section))
 
-                # Extract course staff (instructors and GSIs) from this section
+                # Extract course staff (instructors, GSIs, UGSIs) from this section
                 try:
                     staff_objs = classes.section_instructor_objects(
                         section, role_filter="staff"
@@ -316,7 +316,18 @@ async def _get_course_enrolled_students_async(
                             "instructor.identifiers[?type=='campus-uid'].id | [0]",
                             staff_obj,
                         )
-                        if not uid or uid in seen_uids:
+                        role_code = (staff_obj.get("role") or {}).get("code")
+                        if not uid:
+                            # Assignment exists but no identity populated yet
+                            # (common for GSI slots early in the term cycle).
+                            logger.warning(
+                                f"Section {enrollments.section_id(section)}: "
+                                f"{role_code} assignment has no instructor identity "
+                                f"populated yet; skipping. GSI data may not be loaded "
+                                f"for this term."
+                            )
+                            continue
+                        if uid in seen_uids:
                             continue
                         seen_uids.add(uid)
 

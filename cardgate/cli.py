@@ -12,11 +12,16 @@ from cardgate.core.pipeline import (
     fetch_course_people,
     fetch_people_by_uids,
     fetch_card_data,
+    card_data_skipped_via_env,
     export_to_csv,
     extract_uids_from_csv_rows,
     get_programs,
 )
-from cardgate.core.clearances import load_cardgate_config
+from cardgate.core.clearances import (
+    load_cardgate_config,
+    get_hr_job_title_groups,
+    resolve_hr_job_title_codes,
+)
 
 # Configure logging to write to stderr
 logging.basicConfig(
@@ -78,6 +83,11 @@ def courses(
         "-c",
         help="Path to config YAML (default: CARDGATE_CONFIG env var or cardgate.yaml)",
     ),
+    skip_card_data: bool = typer.Option(
+        False,
+        "--skip-card-data",
+        help="Skip Cal1Card API lookups; card number columns left blank",
+    ),
 ):
     """
     Generate card key access spreadsheets for course-enrolled students and
@@ -98,7 +108,9 @@ def courses(
         config_file = None
 
     if people:
-        fetch_card_data(people)
+        fetch_card_data(
+        people, skip=skip_card_data or card_data_skipped_via_env()
+    )
 
     export_to_csv(
         people,
@@ -111,8 +123,21 @@ def courses(
 
 @app.command()
 def employees(
-    hr_dept: str = typer.Option(
-        ..., "--hr-dept", help="HR department code (e.g., PSTAT)"
+    hr_dept: List[str] = typer.Option(
+        [], "--hr-dept", help="HR department code (can specify multiple)"
+    ),
+    job_group: List[str] = typer.Option(
+        [],
+        "--job-group",
+        help=(
+            "Job title code group to include, from cardgate.yaml "
+            "(e.g., gsi_ta, reader, tutor). Omit for all employees."
+        ),
+    ),
+    job_code: List[str] = typer.Option(
+        [],
+        "--job-code",
+        help="Explicit UCPath title code(s) to include (zero-padding optional)",
     ),
     output_file: Optional[str] = typer.Option(
         None, "--output", "-o", help="Output CSV file path. Defaults to stdout."
@@ -128,14 +153,45 @@ def employees(
         "-c",
         help="Path to config YAML (default: CARDGATE_CONFIG env var or cardgate.yaml)",
     ),
+    skip_card_data: bool = typer.Option(
+        False,
+        "--skip-card-data",
+        help="Skip Cal1Card API lookups; card number columns left blank",
+    ),
 ):
     """
-    Generate card key access spreadsheets for employees in an HR department.
+    Generate card key access spreadsheets for employees in HR departments,
+    optionally filtered by job title code groups (e.g., GSIs/TAs, readers,
+    tutors).
     """
+    if not hr_dept:
+        logger.error("No HR department provided. Use --hr-dept.")
+        raise typer.Exit(code=1)
+
     logger.info(f"Starting pipeline for employees...")
-    people = fetch_employees([hr_dept])
+
+    job_title_codes = None
+    if job_group or job_code:
+        try:
+            cfg = load_cardgate_config(config_file) if os.path.exists(config_file) else {}
+        except Exception as e:
+            logger.warning(f"Could not load config {config_file}: {e}")
+            cfg = {}
+        groups = get_hr_job_title_groups(cfg)
+        unknown = [g for g in job_group if g not in groups]
+        if unknown:
+            known = ", ".join(sorted(groups.keys())) or "(none defined)"
+            logger.error(
+                f"Unknown --job-group value(s): {', '.join(unknown)}. Known groups: {known}"
+            )
+            raise typer.Exit(code=1)
+        job_title_codes = resolve_hr_job_title_codes(cfg, list(job_group), list(job_code))
+
+    people = fetch_employees(hr_dept, job_title_codes=job_title_codes)
     if people:
-        fetch_card_data(people)
+        fetch_card_data(
+        people, skip=skip_card_data or card_data_skipped_via_env()
+    )
     export_to_csv(
         people,
         hr_dept,
@@ -167,6 +223,11 @@ def programs(
         "-c",
         help="Path to config YAML (default: CARDGATE_CONFIG env var or cardgate.yaml)",
     ),
+    skip_card_data: bool = typer.Option(
+        False,
+        "--skip-card-data",
+        help="Skip Cal1Card API lookups; card number columns left blank",
+    ),
 ):
     """
     Generate card key access spreadsheets for program-enrolled students (PhD, MA, BA).
@@ -183,7 +244,9 @@ def programs(
 
     people = fetch_program_students(program_codes, code_to_role=code_to_role)
     if people:
-        fetch_card_data(people)
+        fetch_card_data(
+        people, skip=skip_card_data or card_data_skipped_via_env()
+    )
     export_to_csv(
         people,
         academic_unit,
@@ -216,6 +279,11 @@ def uids(
         "--config",
         "-c",
         help="Path to config YAML (default: CARDGATE_CONFIG env var or cardgate.yaml)",
+    ),
+    skip_card_data: bool = typer.Option(
+        False,
+        "--skip-card-data",
+        help="Skip Cal1Card API lookups; card number columns left blank",
     ),
 ):
     """
@@ -254,7 +322,9 @@ def uids(
         )
         raise typer.Exit(code=1)
 
-    fetch_card_data(people)
+    fetch_card_data(
+        people, skip=skip_card_data or card_data_skipped_via_env()
+    )
     export_to_csv(
         people,
         "UIDs",

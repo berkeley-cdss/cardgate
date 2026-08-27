@@ -16,12 +16,14 @@ def get_programs(config: dict) -> List[dict]:
     return config.get("programs", [])
 
 
-def fetch_employees(hr_departments: List[str]) -> List[Person]:
+def fetch_employees(
+    hr_departments: List[str], job_title_codes: Optional[List[str]] = None
+) -> List[Person]:
     seen: Dict[str, Person] = {}
     for dept in hr_departments:
         logger.info(f"Fetching HR employees for department: {dept}...")
         try:
-            employees = hr.get_employees(dept)
+            employees = hr.get_employees(dept, job_title_codes=job_title_codes)
         except Exception as e:
             logger.warning(f"Skipping department {dept}: {e}")
             continue
@@ -150,13 +152,35 @@ def extract_uids_from_csv_rows(rows: List[List[str]]) -> List[str]:
 import concurrent.futures
 
 
-def fetch_card_data(people: List[Person], progress_callback=None) -> None:
+def card_data_skipped_via_env() -> bool:
+    """True when CARDGATE_SKIP_CARD_DATA is set to a truthy value."""
+    import os
+
+    return os.environ.get("CARDGATE_SKIP_CARD_DATA", "").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+
+
+def fetch_card_data(
+    people: List[Person], progress_callback=None, skip: bool = False
+) -> None:
     """
     Populate the seos_number and lowprox_number fields for each person using the C1C API.
     Uses a thread pool to fetch data concurrently.
     progress_callback(done, total) is called after each person completes.
+
+    If skip is True (or CARDGATE_SKIP_CARD_DATA is set), the Cal1Card API is
+    not contacted and card number fields are left blank.
     """
     if not people:
+        return
+
+    if skip or card_data_skipped_via_env():
+        logger.info(
+            "Skipping card key data retrieval (card number columns left blank)."
+        )
         return
 
     # Validate C1C API is configured before spawning workers
@@ -165,7 +189,8 @@ def fetch_card_data(people: List[Person], progress_callback=None) -> None:
     if not os.environ.get("C1C_API_BASE_URL"):
         raise ValueError(
             "C1C_API_BASE_URL environment variable not set. "
-            "Cannot fetch card key data."
+            "Cannot fetch card key data. Use --skip-card-data to omit "
+            "card key retrieval."
         )
 
     logger.info(f"Fetching card key data for {len(people)} people...")
