@@ -31,11 +31,15 @@ from cardgate.core.clearances import (
     get_clearance_locations,
     get_allowed_groups,
     get_hr_department_codes,
+    get_hr_job_title_groups,
+    resolve_hr_job_title_codes,
 )
 from cardgate.core.pipeline import (
     export_to_csv,
     extract_uids_from_csv_rows,
     fetch_card_data,
+    card_data_skipped_via_env,
+    fetch_course_people,
     fetch_employees,
     fetch_people_by_uids,
     fetch_program_students,
@@ -110,10 +114,11 @@ def start_job(params):
         jobs[job_id]["filename"] = "uid-access-request.csv"
     else:
         unit = params.get("academic_unit", "Unknown")
-        building = params.get("building", "Unknown")
+        building = params.get("building")
         year = params.get("year", "")
         semester = params.get("semester", "")
-        jobs[job_id]["filename"] = f"{unit}-{building}-{year}{semester}.csv"
+        label = "-".join(x for x in [unit, building, f"{year}{semester}"] if x)
+        jobs[job_id]["filename"] = f"{label}.csv"
 
     def process():
         try:
@@ -121,7 +126,10 @@ def start_job(params):
 
             if mode == "employees":
                 jobs[job_id]["progress"] = "Querying HR for employees..."
-                people = fetch_employees(params.get("hr_depts", []))
+                people = fetch_employees(
+                    params.get("hr_depts", []),
+                    job_title_codes=params.get("job_title_codes"),
+                )
                 unit = "-".join(params.get("hr_depts", [])[:3]) or "Employees"
             elif mode == "programs":
                 jobs[job_id]["progress"] = "Querying SIS for program students..."
@@ -147,33 +155,37 @@ def start_job(params):
                 unit = "UIDs"
             else:
                 jobs[job_id]["progress"] = "Querying SIS..."
-                from cardgate.integrations import sis as sis_module
-
-                people = sis_module.get_course_enrolled_students(
+                people = fetch_course_people(
                     params.get("academic_unit"),
                     params.get("building"),
                     int(params.get("year")),
                     params.get("semester"),
                     params.get("from_time") or None,
+                    role=params.get("role", "all"),
                 )
                 unit = params.get("academic_unit")
 
             jobs[job_id]["progress"] = f"Found {len(people)} people"
 
             if people:
-                if not os.environ.get("C1C_API_BASE_URL"):
-                    jobs[job_id]["status"] = "error"
+                if card_data_skipped_via_env():
                     jobs[job_id][
-                        "error"
-                    ] = "C1C_API_BASE_URL environment variable not set."
-                    return
+                        "progress"
+                    ] = "Skipping card data retrieval (disabled on this deployment)"
+                else:
+                    if not os.environ.get("C1C_API_BASE_URL"):
+                        jobs[job_id]["status"] = "error"
+                        jobs[job_id][
+                            "error"
+                        ] = "C1C_API_BASE_URL environment variable not set."
+                        return
 
-                jobs[job_id]["progress"] = "Fetching card data..."
+                    jobs[job_id]["progress"] = "Fetching card data..."
 
-                def card_progress(done, total):
-                    jobs[job_id]["progress"] = f"Card data: {done}/{total}"
+                    def card_progress(done, total):
+                        jobs[job_id]["progress"] = f"Card data: {done}/{total}"
 
-                fetch_card_data(people, progress_callback=card_progress)
+                    fetch_card_data(people, progress_callback=card_progress)
 
             jobs[job_id]["progress"] = "Generating CSV..."
             output = io.StringIO()
@@ -207,6 +219,10 @@ def index():
     clearances = get_clearance_locations(config)
     programs = get_programs(config)
     hr_department_codes = get_hr_department_codes(config)
+    hr_job_groups = [
+        {"key": key, "label": (group or {}).get("label", key)}
+        for key, group in get_hr_job_title_groups(config).items()
+    ]
     return render_template(
         "index.html",
         academic_units=academic_units,
@@ -215,6 +231,7 @@ def index():
         clearances=clearances,
         programs=programs,
         hr_department_codes=hr_department_codes,
+        hr_job_groups=hr_job_groups,
         oidc_enabled=app.config.get("OIDC_ENABLED", False),
     )
 
@@ -238,9 +255,21 @@ def generate():
         seen = set()
         hr_depts = [c for c in hr_depts if not (c in seen or seen.add(c))]
 
+        job_groups = request.form.getlist("job_groups")
+        job_codes_other = [
+            c.strip() for c in request.form.get("job_codes_other", "").split(",")
+            if c.strip()
+        ]
+        job_title_codes = resolve_hr_job_title_codes(
+            config, job_groups, job_codes_other
+        )
+        if job_title_codes:
+            logger.info(f"Employees job title filter: {job_title_codes}")
+
         params = {
             "mode": "employees",
             "hr_depts": hr_depts,
+            "job_title_codes": job_title_codes,
             "selected_clearances": selected_clearances,
         }
     elif mode == "programs":
@@ -329,20 +358,27 @@ def generate():
         building = request.form.get("building", "")
         if building == "Other":
             building = request.form.get("building_other", "")
+        elif building == "Any":
+            building = ""
         year = request.form.get("year", "")
         semester = request.form.get("semester", "")
         from_time = request.form.get("from_time", "")
+        role = request.form.get("role", "all")
 
-        if not academic_unit or not building or not year or not semester:
+        if role not in ("staff", "students", "all"):
+            return {"error": "Invalid role selection"}, 400
+
+        if not academic_unit or not year or not semester:
             return {"error": "Missing required fields"}, 400
 
         params = {
             "mode": "courses",
             "academic_unit": academic_unit,
-            "building": building,
+            "building": building or None,
             "year": year,
             "semester": semester,
             "from_time": from_time,
+            "role": role,
             "selected_clearances": selected_clearances,
         }
 
